@@ -4,7 +4,7 @@ A frontend for chatting/RP with LLMs, designed to be a TUI version of [SillyTave
 
 Still in development.
 
-![demo](assets/demo.mov)
+![demo](assets/demo.gif)
 
 
 
