@@ -6,6 +6,17 @@
 
 #define STYLE_STACK_MAX 64
 
+#define MD_PAIR_NORMAL 1
+#define MD_PAIR_ITALIC 2
+#define MD_PAIR_QUOTE 3
+#define MD_PAIR_URL 4
+#define MD_PAIR_NORMAL_SEL 5
+#define MD_PAIR_ITALIC_SEL 6
+#define MD_PAIR_QUOTE_SEL 7
+#define MD_PAIR_URL_SEL 8
+
+#define MD_BG_SELECTED 236
+
 typedef enum {
   STYLE_ITALIC = 1 << 0,
   STYLE_QUOTE = 1 << 1,
@@ -23,6 +34,7 @@ typedef struct {
   unsigned style_stack[STYLE_STACK_MAX];
   size_t style_depth;
   attr_t active_attr;
+  int bg_color;
 } RenderCtx;
 
 static bool g_supports_color = false;
@@ -37,70 +49,86 @@ void markdown_init_colors(void) {
     return;
   }
   use_default_colors();
-  init_pair(1, 245, -1); // Italic/Action - soft gray
-  init_pair(2, 218, -1); // Quote/Dialogue - soft pink
-  init_pair(3, 75, -1);  // URL - soft blue
+
+  init_pair(MD_PAIR_NORMAL, -1, -1);
+  init_pair(MD_PAIR_ITALIC, 245, -1);
+  init_pair(MD_PAIR_QUOTE, 218, -1);
+  init_pair(MD_PAIR_URL, 75, -1);
+
+  init_pair(MD_PAIR_NORMAL_SEL, -1, MD_BG_SELECTED);
+  init_pair(MD_PAIR_ITALIC_SEL, 245, MD_BG_SELECTED);
+  init_pair(MD_PAIR_QUOTE_SEL, 218, MD_BG_SELECTED);
+  init_pair(MD_PAIR_URL_SEL, 75, MD_BG_SELECTED);
+
   g_supports_color = true;
 }
 
 bool markdown_has_colors(void) { return g_supports_color; }
 
-static attr_t style_to_attr(unsigned style_flags) {
+static int get_color_pair(unsigned style_flags, bool selected) {
+  if (!g_supports_color)
+    return 0;
+
+  int base_pair;
+  if (style_flags & STYLE_URL) {
+    base_pair = MD_PAIR_URL;
+  } else if (style_flags & STYLE_QUOTE) {
+    base_pair = MD_PAIR_QUOTE;
+  } else if ((style_flags & STYLE_ITALIC) && !(style_flags & STYLE_QUOTE)) {
+    base_pair = MD_PAIR_ITALIC;
+  } else {
+    base_pair = MD_PAIR_NORMAL;
+  }
+
+  if (selected) {
+    return base_pair + 4;
+  }
+  return base_pair;
+}
+
+static attr_t style_to_attr(unsigned style_flags, bool selected) {
   attr_t attr = A_NORMAL;
 
-  if (style_flags & STYLE_BOLD) {
+  if (style_flags & STYLE_BOLD)
     attr |= A_BOLD;
-  }
-  if (style_flags & STYLE_ITALIC) {
+  if (style_flags & STYLE_ITALIC)
     attr |= A_ITALIC;
-    if (g_supports_color && !(style_flags & STYLE_QUOTE) &&
-        !(style_flags & STYLE_URL)) {
-      attr |= COLOR_PAIR(1);
-    }
-  }
-  if (style_flags & STYLE_QUOTE) {
-    if (g_supports_color) {
-      attr |= COLOR_PAIR(2);
-    }
-  }
-  if (style_flags & STYLE_URL) {
+  if (style_flags & STYLE_URL)
     attr |= A_UNDERLINE;
-    if (g_supports_color) {
-      attr |= COLOR_PAIR(3);
-    }
-  }
+
+  int pair = get_color_pair(style_flags, selected);
+  if (pair > 0)
+    attr |= COLOR_PAIR(pair);
+
   return attr;
 }
 
 static void push_style(RenderCtx *ctx, unsigned mask) {
-  if (ctx->style_depth >= STYLE_STACK_MAX) {
+  if (ctx->style_depth >= STYLE_STACK_MAX)
     return;
-  }
   ctx->style_stack[ctx->style_depth++] = mask;
   ctx->current_style |= mask;
 }
 
 static void pop_style(RenderCtx *ctx, unsigned mask) {
-  if (ctx->style_depth == 0) {
+  if (ctx->style_depth == 0)
     return;
-  }
   for (size_t i = ctx->style_depth; i > 0; --i) {
     if (ctx->style_stack[i - 1] == mask) {
-      for (size_t j = i - 1; j < ctx->style_depth - 1; ++j) {
+      for (size_t j = i - 1; j < ctx->style_depth - 1; ++j)
         ctx->style_stack[j] = ctx->style_stack[j + 1];
-      }
       ctx->style_depth--;
       break;
     }
   }
   ctx->current_style = 0;
-  for (size_t i = 0; i < ctx->style_depth; ++i) {
+  for (size_t i = 0; i < ctx->style_depth; ++i)
     ctx->current_style |= ctx->style_stack[i];
-  }
 }
 
 static void refresh_attr(RenderCtx *ctx) {
-  attr_t desired = style_to_attr(ctx->current_style);
+  bool selected = (ctx->bg_color == MD_BG_SELECTED);
+  attr_t desired = style_to_attr(ctx->current_style, selected);
   if (ctx->active_attr != desired) {
     wattrset(ctx->win, desired);
     ctx->active_attr = desired;
@@ -130,9 +158,8 @@ static int utf8_display_width(const char *str, int byte_len) {
 
 static void emit_utf8_char(RenderCtx *ctx, const char *str, int byte_len) {
   int display_width = utf8_display_width(str, byte_len);
-  if (ctx->cursor + display_width > ctx->max_width) {
+  if (ctx->cursor + display_width > ctx->max_width)
     return;
-  }
   refresh_attr(ctx);
   char buf[8];
   if (byte_len > 7)
@@ -144,9 +171,8 @@ static void emit_utf8_char(RenderCtx *ctx, const char *str, int byte_len) {
 }
 
 static void emit_char(RenderCtx *ctx, char ch) {
-  if (ctx->cursor >= ctx->max_width) {
+  if (ctx->cursor >= ctx->max_width)
     return;
-  }
   refresh_attr(ctx);
   mvwaddch(ctx->win, ctx->row, ctx->start_col + ctx->cursor, ch);
   ctx->cursor++;
@@ -171,9 +197,8 @@ static void emit_str(RenderCtx *ctx, const char *str, size_t len) {
 
 static bool is_style_active(RenderCtx *ctx, unsigned mask) {
   for (size_t i = 0; i < ctx->style_depth; ++i) {
-    if (ctx->style_stack[i] == mask) {
+    if (ctx->style_stack[i] == mask)
       return true;
-    }
   }
   return false;
 }
@@ -194,18 +219,15 @@ static size_t try_parse_url(const char *text, size_t len, size_t pos) {
     size_t plen = prefix_lens[p];
     if (pos + plen <= len && strncmp(text + pos, prefixes[p], plen) == 0) {
       size_t end = pos + plen;
-      while (end < len && is_url_char(text[end])) {
+      while (end < len && is_url_char(text[end]))
         end++;
-      }
       while (end > pos + plen &&
              (text[end - 1] == '.' || text[end - 1] == ',' ||
               text[end - 1] == ')' || text[end - 1] == '!' ||
-              text[end - 1] == '?')) {
+              text[end - 1] == '?'))
         end--;
-      }
-      if (end > pos + plen) {
+      if (end > pos + plen)
         return end - pos;
-      }
     }
   }
   return 0;
@@ -213,9 +235,8 @@ static size_t try_parse_url(const char *text, size_t len, size_t pos) {
 
 static size_t count_asterisks(const char *text, size_t len, size_t pos) {
   size_t count = 0;
-  while (pos + count < len && text[pos + count] == '*') {
+  while (pos + count < len && text[pos + count] == '*')
     count++;
-  }
   return count;
 }
 
@@ -313,13 +334,28 @@ void markdown_render_line(WINDOW *win, int row, int start_col, int width,
 unsigned markdown_render_line_styled(WINDOW *win, int row, int start_col,
                                      int width, const char *text,
                                      unsigned initial_style) {
-  if (width <= 0) {
+  return markdown_render_line_bg(win, row, start_col, width, text,
+                                 initial_style, -1);
+}
+
+unsigned markdown_render_line_bg(WINDOW *win, int row, int start_col, int width,
+                                 const char *text, unsigned initial_style,
+                                 int bg_color) {
+  if (width <= 0)
     return initial_style;
+
+  bool selected = (bg_color == MD_BG_SELECTED);
+  if (selected && g_supports_color) {
+    wattron(win, COLOR_PAIR(MD_PAIR_NORMAL_SEL));
+    mvwhline(win, row, start_col, ' ', width);
+    wattroff(win, COLOR_PAIR(MD_PAIR_NORMAL_SEL));
+  } else {
+    mvwhline(win, row, start_col, ' ', width);
   }
-  mvwhline(win, row, start_col, ' ', width);
-  if (!text || text[0] == '\0') {
+
+  if (!text || text[0] == '\0')
     return initial_style;
-  }
+
   RenderCtx ctx = {.win = win,
                    .row = row,
                    .start_col = start_col,
@@ -327,7 +363,8 @@ unsigned markdown_render_line_styled(WINDOW *win, int row, int start_col,
                    .cursor = 0,
                    .current_style = 0,
                    .style_depth = 0,
-                   .active_attr = A_NORMAL};
+                   .active_attr = A_NORMAL,
+                   .bg_color = bg_color};
 
   if (initial_style & STYLE_BOLD)
     push_style(&ctx, STYLE_BOLD);

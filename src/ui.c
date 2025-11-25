@@ -7,9 +7,13 @@
 
 static bool g_ui_colors = false;
 
-#define COLOR_PAIR_BORDER_DIM 11
-#define COLOR_PAIR_ACCENT 12
-#define COLOR_PAIR_STATUS 13
+#define COLOR_PAIR_BORDER_DIM 20
+#define COLOR_PAIR_ACCENT 21
+#define COLOR_PAIR_STATUS 22
+#define COLOR_PAIR_USER_SEL 23
+#define COLOR_PAIR_BOT_SEL 24
+
+#define SEL_BG 236
 
 void ui_init_colors(void) {
   if (!has_colors()) {
@@ -28,6 +32,9 @@ void ui_init_colors(void) {
   init_pair(COLOR_PAIR_BORDER_DIM, 8, -1);
   init_pair(COLOR_PAIR_ACCENT, COLOR_MAGENTA, -1);
   init_pair(COLOR_PAIR_STATUS, 8, -1);
+  init_pair(COLOR_PAIR_MSG_SELECTED, -1, SEL_BG);
+  init_pair(COLOR_PAIR_USER_SEL, COLOR_GREEN, SEL_BG);
+  init_pair(COLOR_PAIR_BOT_SEL, COLOR_MAGENTA, SEL_BG);
   g_ui_colors = true;
 }
 
@@ -324,8 +331,64 @@ int ui_get_total_lines(WINDOW *chat_win, const ChatHistory *history) {
   return total;
 }
 
+int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
+                             int selected_msg) {
+  if (selected_msg < 0 || history->count == 0)
+    return -1;
+
+  int height, width;
+  getmaxyx(chat_win, height, width);
+  int usable_lines = height - 2;
+  int content_width = width - 4;
+  if (usable_lines <= 0 || content_width <= 0)
+    return -1;
+
+  int max_display = (int)history->count * 100 + 100;
+  DisplayLine *all_lines = malloc(sizeof(DisplayLine) * max_display);
+  if (!all_lines)
+    return -1;
+
+  int total_display_lines =
+      build_display_lines(history, content_width, all_lines, max_display);
+
+  int msg_start_line = -1;
+  int msg_end_line = -1;
+  for (int i = 0; i < total_display_lines; i++) {
+    if (all_lines[i].msg_index == selected_msg) {
+      if (msg_start_line < 0)
+        msg_start_line = i;
+      msg_end_line = i;
+    }
+  }
+
+  free(all_lines);
+
+  if (msg_start_line < 0)
+    return -1;
+
+  int max_scroll = total_display_lines - usable_lines;
+  if (max_scroll < 0)
+    max_scroll = 0;
+
+  int msg_height = msg_end_line - msg_start_line + 1;
+  int target_scroll;
+
+  if (msg_height >= usable_lines) {
+    target_scroll = msg_start_line;
+  } else {
+    target_scroll = msg_start_line - (usable_lines - msg_height) / 2;
+  }
+
+  if (target_scroll < 0)
+    target_scroll = 0;
+  if (target_scroll > max_scroll)
+    target_scroll = max_scroll;
+
+  return target_scroll;
+}
+
 void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
-                  int scroll_offset, const char *model_name,
+                  int selected_msg, const char *model_name,
                   const char *user_name, const char *bot_name) {
   if (!user_name || !user_name[0])
     user_name = "You";
@@ -367,14 +430,20 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
   if (max_scroll < 0)
     max_scroll = 0;
 
-  int start_line;
-  if (scroll_offset < 0) {
-    start_line = max_scroll;
+  int scroll_offset;
+  if (selected_msg >= 0 && selected_msg < (int)history->count) {
+    scroll_offset = ui_get_msg_scroll_offset(chat_win, history, selected_msg);
+    if (scroll_offset < 0)
+      scroll_offset = max_scroll;
   } else {
-    start_line = scroll_offset;
-    if (start_line > max_scroll)
-      start_line = max_scroll;
+    scroll_offset = max_scroll;
   }
+
+  int start_line = scroll_offset;
+  if (start_line > max_scroll)
+    start_line = max_scroll;
+  if (start_line < 0)
+    start_line = 0;
 
   int gutter_width = 3;
   int text_width = content_width - gutter_width;
@@ -390,37 +459,50 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
     if (dl->is_spacer)
       continue;
 
+    bool is_selected = (dl->msg_index == selected_msg);
+    int bg_color = is_selected ? 236 : -1;
+
+    if (is_selected && g_ui_colors) {
+      wattron(chat_win, COLOR_PAIR(COLOR_PAIR_MSG_SELECTED));
+      mvwhline(chat_win, y, 1, ' ', width - 2);
+      wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_MSG_SELECTED));
+    }
+
     if (dl->is_name_line) {
       if (dl->is_user) {
+        int pair = is_selected ? COLOR_PAIR_USER_SEL : COLOR_PAIR_USER;
         if (g_ui_colors)
-          wattron(chat_win, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+          wattron(chat_win, COLOR_PAIR(pair) | A_BOLD);
         mvwaddstr(chat_win, y, x, "▸ ");
         mvwaddstr(chat_win, y, x + 2, user_name);
         if (g_ui_colors)
-          wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+          wattroff(chat_win, COLOR_PAIR(pair) | A_BOLD);
       } else if (dl->is_bot) {
+        int pair = is_selected ? COLOR_PAIR_BOT_SEL : COLOR_PAIR_BOT;
         if (g_ui_colors)
-          wattron(chat_win, COLOR_PAIR(COLOR_PAIR_BOT) | A_BOLD);
+          wattron(chat_win, COLOR_PAIR(pair) | A_BOLD);
         mvwaddstr(chat_win, y, x, "◆ ");
         mvwaddstr(chat_win, y, x + 2, bot_name);
         if (g_ui_colors)
-          wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_BOT) | A_BOLD);
+          wattroff(chat_win, COLOR_PAIR(pair) | A_BOLD);
       }
       continue;
     }
 
     if (dl->is_user) {
+      int pair = is_selected ? COLOR_PAIR_USER_SEL : COLOR_PAIR_USER;
       if (g_ui_colors)
-        wattron(chat_win, COLOR_PAIR(COLOR_PAIR_USER) | A_DIM);
+        wattron(chat_win, COLOR_PAIR(pair) | A_DIM);
       mvwaddstr(chat_win, y, x, "│");
       if (g_ui_colors)
-        wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_USER) | A_DIM);
+        wattroff(chat_win, COLOR_PAIR(pair) | A_DIM);
     } else if (dl->is_bot) {
+      int pair = is_selected ? COLOR_PAIR_BOT_SEL : COLOR_PAIR_BOT;
       if (g_ui_colors)
-        wattron(chat_win, COLOR_PAIR(COLOR_PAIR_BOT) | A_DIM);
+        wattron(chat_win, COLOR_PAIR(pair) | A_DIM);
       mvwaddstr(chat_win, y, x, "│");
       if (g_ui_colors)
-        wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_BOT) | A_DIM);
+        wattroff(chat_win, COLOR_PAIR(pair) | A_DIM);
     }
 
     char line_buf[512];
@@ -430,8 +512,8 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
     strncpy(line_buf, dl->line_start, to_copy);
     line_buf[to_copy] = '\0';
 
-    markdown_render_line_styled(chat_win, y, x + gutter_width, text_width,
-                                line_buf, dl->initial_style);
+    markdown_render_line_bg(chat_win, y, x + gutter_width, text_width, line_buf,
+                            dl->initial_style, bg_color);
   }
 
   if (total_display_lines > usable_lines) {
@@ -470,28 +552,39 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
   wrefresh(chat_win);
 }
 
-void ui_draw_input(WINDOW *input_win, const char *buffer, int cursor_pos) {
+void ui_draw_input(WINDOW *input_win, const char *buffer, int cursor_pos,
+                   bool focused) {
   werase(input_win);
-  draw_rounded_box(input_win, COLOR_PAIR_BORDER, true);
+  draw_rounded_box(input_win, COLOR_PAIR_BORDER, focused);
 
   int h, w;
   getmaxyx(input_win, h, w);
   (void)h;
   int buf_len = (int)strlen(buffer);
 
-  if (g_ui_colors)
-    wattron(input_win, COLOR_PAIR(COLOR_PAIR_PROMPT) | A_BOLD);
-  mvwaddstr(input_win, 1, 2, "›");
-  if (g_ui_colors)
-    wattroff(input_win, COLOR_PAIR(COLOR_PAIR_PROMPT) | A_BOLD);
+  if (focused) {
+    if (g_ui_colors)
+      wattron(input_win, COLOR_PAIR(COLOR_PAIR_PROMPT) | A_BOLD);
+    mvwaddstr(input_win, 1, 2, "›");
+    if (g_ui_colors)
+      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_PROMPT) | A_BOLD);
+  } else {
+    if (g_ui_colors)
+      wattron(input_win, COLOR_PAIR(COLOR_PAIR_HINT));
+    mvwaddstr(input_win, 1, 2, "›");
+    if (g_ui_colors)
+      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_HINT));
+  }
 
   mvwprintw(input_win, 1, 4, "%s", buffer);
 
-  int screen_cursor = 4 + cursor_pos;
-  wattron(input_win, A_REVERSE);
-  char under_cursor = (cursor_pos < buf_len) ? buffer[cursor_pos] : ' ';
-  mvwaddch(input_win, 1, screen_cursor, under_cursor);
-  wattroff(input_win, A_REVERSE);
+  if (focused) {
+    int screen_cursor = 4 + cursor_pos;
+    wattron(input_win, A_REVERSE);
+    char under_cursor = (cursor_pos < buf_len) ? buffer[cursor_pos] : ' ';
+    mvwaddch(input_win, 1, screen_cursor, under_cursor);
+    wattroff(input_win, A_REVERSE);
+  }
 
   if (buffer[0] == '\0' && g_ui_colors) {
     wattron(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
@@ -501,7 +594,7 @@ void ui_draw_input(WINDOW *input_win, const char *buffer, int cursor_pos) {
 
   if (g_ui_colors)
     wattron(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
-  mvwaddstr(input_win, 1, w - 14, "↑↓ scroll");
+  mvwaddstr(input_win, 1, w - 14, "↑↓ navigate");
   if (g_ui_colors)
     wattroff(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
 

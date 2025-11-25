@@ -13,8 +13,10 @@
 #define COLOR_PAIR_LOADING 16
 #define COLOR_PAIR_SUGGEST_ACTIVE 17
 #define COLOR_PAIR_SUGGEST_DESC 18
+#define COLOR_PAIR_MSG_SELECTED 19
 
 #define MAX_DYNAMIC_ITEMS 32
+#define MSG_SELECT_NONE -1
 
 typedef struct {
   const char *name;
@@ -44,10 +46,13 @@ typedef struct {
 void ui_init_colors(void);
 void ui_layout_windows(WINDOW **chat_win, WINDOW **input_win);
 void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
-                  int scroll_offset, const char *model_name,
+                  int selected_msg, const char *model_name,
                   const char *user_name, const char *bot_name);
-void ui_draw_input(WINDOW *input_win, const char *buffer, int cursor_pos);
+void ui_draw_input(WINDOW *input_win, const char *buffer, int cursor_pos,
+                   bool focused);
 int ui_get_total_lines(WINDOW *chat_win, const ChatHistory *history);
+int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
+                             int selected_msg);
 
 void suggestion_box_init(SuggestionBox *sb, const SlashCommand *commands,
                          int count);
