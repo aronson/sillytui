@@ -7,11 +7,11 @@
 
 static bool g_ui_colors = false;
 
-#define COLOR_PAIR_BORDER_DIM 20
-#define COLOR_PAIR_ACCENT 21
-#define COLOR_PAIR_STATUS 22
-#define COLOR_PAIR_USER_SEL 23
-#define COLOR_PAIR_BOT_SEL 24
+#define COLOR_PAIR_BORDER_DIM 22
+#define COLOR_PAIR_ACCENT 23
+#define COLOR_PAIR_STATUS 24
+#define COLOR_PAIR_USER_SEL 25
+#define COLOR_PAIR_BOT_SEL 26
 
 #define SEL_BG 236
 
@@ -29,10 +29,12 @@ void ui_init_colors(void) {
   init_pair(COLOR_PAIR_LOADING, COLOR_CYAN, -1);
   init_pair(COLOR_PAIR_SUGGEST_ACTIVE, COLOR_BLACK, COLOR_CYAN);
   init_pair(COLOR_PAIR_SUGGEST_DESC, COLOR_CYAN, -1);
+  init_pair(COLOR_PAIR_MSG_SELECTED, -1, SEL_BG);
+  init_pair(COLOR_PAIR_SWIPE, 8, -1);
+  init_pair(COLOR_PAIR_SWIPE_SEL, 8, SEL_BG);
   init_pair(COLOR_PAIR_BORDER_DIM, 8, -1);
   init_pair(COLOR_PAIR_ACCENT, COLOR_MAGENTA, -1);
   init_pair(COLOR_PAIR_STATUS, 8, -1);
-  init_pair(COLOR_PAIR_MSG_SELECTED, -1, SEL_BG);
   init_pair(COLOR_PAIR_USER_SEL, COLOR_GREEN, SEL_BG);
   init_pair(COLOR_PAIR_BOT_SEL, COLOR_MAGENTA, SEL_BG);
   g_ui_colors = true;
@@ -249,7 +251,9 @@ static int build_display_lines(const ChatHistory *history, int content_width,
     return 0;
 
   for (size_t i = 0; i < history->count && total < max_lines; i++) {
-    const char *msg = history->items[i];
+    const char *msg = history_get(history, i);
+    if (!msg)
+      continue;
     const char *content = msg;
     bool is_user = starts_with(msg, "You: ");
     bool is_bot = starts_with(msg, "Bot:");
@@ -332,7 +336,9 @@ int ui_get_total_lines(WINDOW *chat_win, const ChatHistory *history) {
 
   int total = 0;
   for (size_t i = 0; i < history->count; i++) {
-    const char *msg = history->items[i];
+    const char *msg = history_get(history, i);
+    if (!msg)
+      continue;
     const char *content = msg;
     bool is_user = starts_with(msg, "You: ");
     bool is_bot = starts_with(msg, "Bot:");
@@ -508,6 +514,22 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
         mvwaddstr(chat_win, y, x + 2, bot_name);
         if (g_ui_colors)
           wattroff(chat_win, COLOR_PAIR(pair) | A_BOLD);
+
+        size_t swipe_count = history_get_swipe_count(history, dl->msg_index);
+        if (swipe_count > 1) {
+          size_t active = history_get_active_swipe(history, dl->msg_index);
+          char swipe_str[32];
+          snprintf(swipe_str, sizeof(swipe_str), " ◀ %zu/%zu ▶", active + 1,
+                   swipe_count);
+          int swipe_pair =
+              is_selected ? COLOR_PAIR_SWIPE_SEL : COLOR_PAIR_SWIPE;
+          if (g_ui_colors)
+            wattron(chat_win, COLOR_PAIR(swipe_pair));
+          int name_len = (int)strlen(bot_name);
+          mvwaddstr(chat_win, y, x + 2 + name_len, swipe_str);
+          if (g_ui_colors)
+            wattroff(chat_win, COLOR_PAIR(swipe_pair));
+        }
       }
       continue;
     }

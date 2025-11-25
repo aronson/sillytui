@@ -482,7 +482,9 @@ static char *build_request_body(const char *model_id,
   }
 
   for (size_t i = 0; i < history->count; i++) {
-    const char *msg = history->items[i];
+    const char *msg = history_get(history, i);
+    if (!msg)
+      continue;
     const char *role = NULL;
     const char *content = NULL;
 

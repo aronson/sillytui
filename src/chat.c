@@ -286,11 +286,20 @@ bool chat_save(const ChatHistory *history, const char *id, const char *title,
   fprintf(f, "  \"messages\": [\n");
 
   for (size_t i = 0; i < history->count; i++) {
-    char *escaped = escape_json(history->items[i]);
-    if (escaped) {
-      fprintf(f, "    \"%s\"%s\n", escaped, i < history->count - 1 ? "," : "");
-      free(escaped);
+    ChatMessage *msg = &history->messages[i];
+    fprintf(f, "    {\n");
+    fprintf(f, "      \"active\": %zu,\n", msg->active_swipe);
+    fprintf(f, "      \"swipes\": [\n");
+    for (size_t j = 0; j < msg->swipe_count; j++) {
+      char *escaped = escape_json(msg->swipes[j]);
+      if (escaped) {
+        fprintf(f, "        \"%s\"%s\n", escaped,
+                j < msg->swipe_count - 1 ? "," : "");
+        free(escaped);
+      }
     }
+    fprintf(f, "      ]\n");
+    fprintf(f, "    }%s\n", i < history->count - 1 ? "," : "");
   }
 
   fprintf(f, "  ]\n");
@@ -411,6 +420,104 @@ bool chat_load(ChatHistory *history, const char *id_or_title,
       p++;
       continue;
     }
+
+    if (*p == '{') {
+      p++;
+      long active_swipe = 0;
+      const char *active_key = strstr(p, "\"active\"");
+      if (active_key) {
+        const char *colon = strchr(active_key + 8, ':');
+        if (colon)
+          active_swipe = strtol(colon + 1, NULL, 10);
+      }
+
+      const char *swipes_key = strstr(p, "\"swipes\"");
+      if (!swipes_key) {
+        while (*p && *p != '}')
+          p++;
+        if (*p == '}')
+          p++;
+        continue;
+      }
+
+      const char *swipes_arr = strchr(swipes_key, '[');
+      if (!swipes_arr) {
+        while (*p && *p != '}')
+          p++;
+        if (*p == '}')
+          p++;
+        continue;
+      }
+      swipes_arr++;
+
+      size_t msg_idx = SIZE_MAX;
+      bool first_swipe = true;
+
+      const char *sp = swipes_arr;
+      while (*sp) {
+        while (*sp && (*sp == ' ' || *sp == '\n' || *sp == '\r' || *sp == '\t'))
+          sp++;
+        if (*sp == ']')
+          break;
+        if (*sp == ',') {
+          sp++;
+          continue;
+        }
+        if (*sp != '"') {
+          sp++;
+          continue;
+        }
+
+        sp++;
+        const char *str_start = sp;
+        while (*sp && !(*sp == '"' && *(sp - 1) != '\\'))
+          sp++;
+        size_t len = sp - str_start;
+
+        char *swipe_content = malloc(len + 1);
+        if (swipe_content) {
+          size_t j = 0;
+          for (size_t i = 0; i < len; i++) {
+            if (str_start[i] == '\\' && i + 1 < len) {
+              i++;
+              if (str_start[i] == 'n')
+                swipe_content[j++] = '\n';
+              else if (str_start[i] == 't')
+                swipe_content[j++] = '\t';
+              else if (str_start[i] == 'r')
+                swipe_content[j++] = '\r';
+              else
+                swipe_content[j++] = str_start[i];
+            } else {
+              swipe_content[j++] = str_start[i];
+            }
+          }
+          swipe_content[j] = '\0';
+
+          if (first_swipe) {
+            msg_idx = history_add(history, swipe_content);
+            first_swipe = false;
+          } else if (msg_idx != SIZE_MAX) {
+            history_add_swipe(history, msg_idx, swipe_content);
+          }
+          free(swipe_content);
+        }
+
+        if (*sp == '"')
+          sp++;
+      }
+
+      if (msg_idx != SIZE_MAX && active_swipe >= 0) {
+        history_set_active_swipe(history, msg_idx, (size_t)active_swipe);
+      }
+
+      while (*p && *p != '}')
+        p++;
+      if (*p == '}')
+        p++;
+      continue;
+    }
+
     if (*p != '"') {
       p++;
       continue;
@@ -475,7 +582,9 @@ const char *chat_auto_title(const ChatHistory *history) {
   static char title[CHAT_TITLE_MAX];
 
   for (size_t i = 0; i < history->count; i++) {
-    const char *msg = history->items[i];
+    const char *msg = history_get(history, i);
+    if (!msg)
+      continue;
     if (strncmp(msg, "You: ", 5) == 0) {
       const char *content = msg + 5;
       size_t len = strlen(content);

@@ -166,7 +166,7 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
                        .user_name = user_name,
                        .bot_name = bot_name};
 
-  ChatHistory hist_for_llm = {.items = history->items,
+  ChatHistory hist_for_llm = {.messages = history->messages,
                               .count = history->count - 1,
                               .capacity = history->capacity};
 
@@ -697,19 +697,104 @@ int main(void) {
     }
 
     if (ch == KEY_LEFT) {
-      if (cursor_pos > 0 && input_focused) {
+      if (input_focused && cursor_pos > 0) {
         cursor_pos--;
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
                                 input_focused, input_scroll_line);
+      } else if (!input_focused && selected_msg >= 0) {
+        const char *msg = history_get(&history, selected_msg);
+        if (msg && (strncmp(msg, "Bot:", 4) == 0)) {
+          size_t swipe_count = history_get_swipe_count(&history, selected_msg);
+          size_t active = history_get_active_swipe(&history, selected_msg);
+          if (swipe_count > 1 && active > 0) {
+            history_set_active_swipe(&history, selected_msg, active - 1);
+            ui_draw_chat(chat_win, &history, selected_msg,
+                         get_model_name(&models), user_disp, bot_disp);
+          }
+        }
       }
       continue;
     }
 
     if (ch == KEY_RIGHT) {
-      if (cursor_pos < input_len && input_focused) {
+      if (input_focused && cursor_pos < input_len) {
         cursor_pos++;
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
                                 input_focused, input_scroll_line);
+      } else if (!input_focused && selected_msg >= 0) {
+        const char *msg = history_get(&history, selected_msg);
+        bool is_last_bot = (selected_msg == (int)history.count - 1) && msg &&
+                           (strncmp(msg, "Bot:", 4) == 0);
+        if (is_last_bot) {
+          size_t swipe_count = history_get_swipe_count(&history, selected_msg);
+          size_t active = history_get_active_swipe(&history, selected_msg);
+          if (active + 1 < swipe_count) {
+            history_set_active_swipe(&history, selected_msg, active + 1);
+            ui_draw_chat(chat_win, &history, selected_msg,
+                         get_model_name(&models), user_disp, bot_disp);
+          } else {
+            LLMContext llm_ctx = {.character =
+                                      character_loaded ? &character : NULL,
+                                  .persona = &persona};
+            size_t user_msg_idx = selected_msg > 0 ? selected_msg - 1 : 0;
+            const char *user_msg = history_get(&history, user_msg_idx);
+            const char *user_input = "";
+            if (user_msg && strncmp(user_msg, "You: ", 5) == 0)
+              user_input = user_msg + 5;
+
+            history_add_swipe(&history, selected_msg, "Bot: *thinking*");
+            ui_draw_chat(chat_win, &history, selected_msg,
+                         get_model_name(&models), user_disp, bot_disp);
+
+            ModelConfig *model = config_get_active(&models);
+            const char *model_name = get_model_name(&models);
+            if (model) {
+              StreamContext ctx = {.history = &history,
+                                   .chat_win = chat_win,
+                                   .input_win = input_win,
+                                   .msg_index = (size_t)selected_msg,
+                                   .buffer = NULL,
+                                   .buf_cap = 0,
+                                   .buf_len = 0,
+                                   .spinner_frame = 0,
+                                   .last_spinner_update = get_time_ms(),
+                                   .selected_msg = &selected_msg,
+                                   .model_name = model_name,
+                                   .user_name = user_disp,
+                                   .bot_name = bot_disp};
+
+              ChatHistory hist_for_llm = {.messages = history.messages,
+                                          .count = history.count - 1,
+                                          .capacity = history.capacity};
+
+              LLMResponse resp =
+                  llm_chat(model, &hist_for_llm, &llm_ctx, stream_callback,
+                           progress_callback, &ctx);
+
+              if (!resp.success) {
+                char err_msg[512];
+                snprintf(err_msg, sizeof(err_msg),
+                         "Bot: *frowns* \"Error: %s\"", resp.error);
+                history_update(&history, selected_msg, err_msg);
+              } else if (ctx.buf_len == 0) {
+                history_update(&history, selected_msg, "Bot: *stays silent*");
+              }
+
+              free(ctx.buffer);
+              llm_response_free(&resp);
+            }
+            ui_draw_chat(chat_win, &history, selected_msg,
+                         get_model_name(&models), user_disp, bot_disp);
+          }
+        } else if (msg && strncmp(msg, "Bot:", 4) == 0) {
+          size_t swipe_count = history_get_swipe_count(&history, selected_msg);
+          size_t active = history_get_active_swipe(&history, selected_msg);
+          if (active + 1 < swipe_count) {
+            history_set_active_swipe(&history, selected_msg, active + 1);
+            ui_draw_chat(chat_win, &history, selected_msg,
+                         get_model_name(&models), user_disp, bot_disp);
+          }
+        }
       }
       continue;
     }
