@@ -1,6 +1,7 @@
 BUILD_DIR ?= build
+SRC_FILES := $(wildcard src/*.c src/*.h)
 
-.PHONY: all configure build run clean distclean
+.PHONY: all configure build run clean distclean format
 
 all: build
 
@@ -18,4 +19,7 @@ clean:
 
 distclean:
 	rm -rf $(BUILD_DIR)
+
+format:
+	clang-format -i $(SRC_FILES)
 

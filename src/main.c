@@ -592,7 +592,11 @@ int main(void) {
       if (ch == '\t' || ch == '\n' || ch == '\r') {
         const char *selected = suggestion_box_get_selected(&suggestions);
         if (selected) {
-          snprintf(input_buffer, INPUT_MAX, "/%s", selected);
+          if (suggestions.showing_dynamic) {
+            snprintf(input_buffer, INPUT_MAX, "/chat load %s", selected);
+          } else {
+            snprintf(input_buffer, INPUT_MAX, "/%s", selected);
+          }
           input_len = (int)strlen(input_buffer);
           cursor_pos = input_len;
         }

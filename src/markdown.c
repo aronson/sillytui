@@ -37,9 +37,9 @@ void markdown_init_colors(void) {
     return;
   }
   use_default_colors();
-  init_pair(1, COLOR_YELLOW, -1); // Italic/Action
-  init_pair(2, COLOR_CYAN, -1);   // Quote/Dialogue
-  init_pair(3, COLOR_BLUE, -1);   // URL
+  init_pair(1, 245, -1); // Italic/Action - soft gray
+  init_pair(2, 218, -1); // Quote/Dialogue - soft pink
+  init_pair(3, 75, -1);  // URL - soft blue
   g_supports_color = true;
 }
 

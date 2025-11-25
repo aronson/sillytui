@@ -14,10 +14,17 @@
 #define COLOR_PAIR_SUGGEST_ACTIVE 17
 #define COLOR_PAIR_SUGGEST_DESC 18
 
+#define MAX_DYNAMIC_ITEMS 32
+
 typedef struct {
   const char *name;
   const char *description;
 } SlashCommand;
+
+typedef struct {
+  char name[128];
+  char description[128];
+} DynamicItem;
 
 typedef struct {
   WINDOW *win;
@@ -29,6 +36,9 @@ typedef struct {
   const char *filter;
   int *matched_indices;
   int matched_count;
+  DynamicItem *dynamic_items;
+  int dynamic_count;
+  bool showing_dynamic;
 } SuggestionBox;
 
 void ui_init_colors(void);
@@ -41,6 +51,7 @@ int ui_get_total_lines(WINDOW *chat_win, const ChatHistory *history);
 
 void suggestion_box_init(SuggestionBox *sb, const SlashCommand *commands,
                          int count);
+void suggestion_box_free(SuggestionBox *sb);
 void suggestion_box_update(SuggestionBox *sb, const char *filter,
                            WINDOW *parent, int parent_y, int parent_x);
 void suggestion_box_draw(SuggestionBox *sb);
