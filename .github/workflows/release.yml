@@ -77,7 +77,9 @@ jobs:
       - name: Build
         run: |
           mkdir build && cd build
-          cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release \
+            -DCURSES_NEED_NCURSES=TRUE \
+            -DCURSES_INCLUDE_DIR=/mingw64/include/ncursesw
           make -j"$(nproc)"
 
       - name: Package
