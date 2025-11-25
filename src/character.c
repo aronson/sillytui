@@ -328,9 +328,9 @@ bool character_load_json(CharacterCard *card, const char *path) {
     return false;
   }
 
-  fread(data, 1, len, f);
+  size_t read_len = fread(data, 1, len, f);
   fclose(f);
-  data[len] = '\0';
+  data[read_len] = '\0';
 
   bool result = parse_character_data(data, card);
   free(data);
