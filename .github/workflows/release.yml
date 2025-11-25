@@ -69,6 +69,8 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
             artifacts/sillytui-macos-arm64/sillytui-macos-arm64
