@@ -103,9 +103,9 @@ bool persona_load(Persona *persona) {
     return false;
   }
 
-  fread(data, 1, len, f);
+  size_t read_len = fread(data, 1, len, f);
   fclose(f);
-  data[len] = '\0';
+  data[read_len] = '\0';
 
   char *p = data;
   p = skip_ws(p);
