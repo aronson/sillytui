@@ -19,6 +19,13 @@ void llm_init(void) { curl_global_init(CURL_GLOBAL_DEFAULT); }
 
 void llm_cleanup(void) { curl_global_cleanup(); }
 
+int llm_estimate_tokens(const char *text) {
+  if (!text)
+    return 0;
+  size_t len = strlen(text);
+  return (int)(len / 3.35) + 1;
+}
+
 static void append_to_response(LLMResponse *resp, const char *data,
                                size_t len) {
   if (resp->len + len + 1 > resp->cap) {
@@ -413,7 +420,7 @@ static char *build_system_prompt(const LLMContext *context) {
 
 static char *build_request_body(const char *model_id,
                                 const ChatHistory *history,
-                                const LLMContext *context) {
+                                const LLMContext *context, int context_length) {
   size_t cap = 16384;
   char *body = malloc(cap);
   if (!body)
@@ -481,7 +488,43 @@ static char *build_request_body(const char *model_id,
     }
   }
 
-  for (size_t i = 0; i < history->count; i++) {
+  int tokens_used = llm_estimate_tokens(body);
+
+  int response_reserve = context_length / 4;
+  if (response_reserve < 1024)
+    response_reserve = 1024;
+  if (response_reserve > 4096)
+    response_reserve = 4096;
+
+  int available_tokens = context_length - tokens_used - response_reserve;
+
+  int post_history_tokens = 0;
+  if (context && context->character &&
+      context->character->post_history_instructions &&
+      context->character->post_history_instructions[0]) {
+    post_history_tokens =
+        llm_estimate_tokens(context->character->post_history_instructions) + 20;
+    available_tokens -= post_history_tokens;
+  }
+
+  size_t start_index = 0;
+  if (history->count > 0 && available_tokens > 0) {
+    int cumulative_tokens = 0;
+    for (size_t i = history->count; i > 0; i--) {
+      const char *msg = history_get(history, i - 1);
+      if (!msg)
+        continue;
+
+      int msg_tokens = llm_estimate_tokens(msg) + 20;
+      if (cumulative_tokens + msg_tokens > available_tokens) {
+        start_index = i;
+        break;
+      }
+      cumulative_tokens += msg_tokens;
+    }
+  }
+
+  for (size_t i = start_index; i < history->count; i++) {
     const char *msg = history_get(history, i);
     if (!msg)
       continue;
@@ -577,7 +620,9 @@ LLMResponse llm_chat(const ModelConfig *config, const ChatHistory *history,
   char url[512];
   snprintf(url, sizeof(url), "%s/chat/completions", config->base_url);
 
-  char *body = build_request_body(config->model_id, history, context);
+  int ctx_len = config->context_length > 0 ? config->context_length
+                                           : DEFAULT_CONTEXT_LENGTH;
+  char *body = build_request_body(config->model_id, history, context, ctx_len);
   if (!body) {
     snprintf(resp.error, sizeof(resp.error), "Failed to build request");
     curl_easy_cleanup(curl);
@@ -606,6 +651,19 @@ LLMResponse llm_chat(const ModelConfig *config, const ChatHistory *history,
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, stream_callback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
+
+  if (strstr(url, "localhost") || strstr(url, "127.0.0.1") ||
+      strstr(url, "0.0.0.0")) {
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+  }
+
+  curl_easy_setopt(curl, CURLOPT_NOPROXY, "localhost,127.0.0.1,0.0.0.0");
+
+  if (strncmp(url, "http://", 7) == 0) {
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+  }
 
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progress_callback);

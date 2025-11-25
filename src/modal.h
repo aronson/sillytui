@@ -12,6 +12,7 @@ typedef enum {
   MODAL_NONE,
   MODAL_MODEL_SET,
   MODAL_MODEL_LIST,
+  MODAL_MODEL_EDIT,
   MODAL_MESSAGE,
   MODAL_CHAT_LIST,
   MODAL_CHAT_SAVE,
@@ -33,9 +34,9 @@ typedef struct {
   int start_x;
 
   int field_index;
-  char fields[4][256];
-  int field_cursor[4];
-  int field_len[4];
+  char fields[5][256];
+  int field_cursor[5];
+  int field_len[5];
 
   int list_selection;
   int list_scroll;
@@ -56,6 +57,8 @@ typedef struct {
   int edit_cursor;
   int edit_len;
   int edit_scroll;
+
+  int edit_model_index; // Index of model being edited
 
   bool exit_dont_ask;
 
@@ -80,6 +83,7 @@ typedef enum {
 void modal_init(Modal *m);
 void modal_open_model_set(Modal *m);
 void modal_open_model_list(Modal *m, const ModelsFile *mf);
+void modal_open_model_edit(Modal *m, const ModelsFile *mf, int model_index);
 void modal_open_message(Modal *m, const char *msg, bool is_error);
 void modal_open_chat_list(Modal *m);
 void modal_open_chat_save(Modal *m, const char *current_id,

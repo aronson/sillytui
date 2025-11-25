@@ -173,6 +173,7 @@ bool config_load_models(ModelsFile *mf) {
 
         ModelConfig *m = &mf->models[mf->count];
         memset(m, 0, sizeof(*m));
+        m->context_length = DEFAULT_CONTEXT_LENGTH;
 
         while (*p) {
           p = skip_ws(p);
@@ -201,6 +202,13 @@ bool config_load_models(ModelsFile *mf) {
             p = parse_string(p, m->api_key, sizeof(m->api_key));
           } else if (strcmp(mkey, "model_id") == 0) {
             p = parse_string(p, m->model_id, sizeof(m->model_id));
+          } else if (strcmp(mkey, "context_length") == 0) {
+            p = skip_ws(p);
+            m->context_length = atoi(p);
+            if (m->context_length <= 0)
+              m->context_length = DEFAULT_CONTEXT_LENGTH;
+            while (*p && *p != ',' && *p != '}')
+              p++;
           }
           if (!p)
             break;
@@ -245,7 +253,9 @@ bool config_save_models(const ModelsFile *mf) {
     fprintf(f, ",\n");
     fprintf(f, "      \"model_id\": ");
     write_escaped(f, m->model_id);
-    fprintf(f, "\n");
+    fprintf(f, ",\n");
+    fprintf(f, "      \"context_length\": %d\n",
+            m->context_length > 0 ? m->context_length : DEFAULT_CONTEXT_LENGTH);
     fprintf(f, "    }%s\n", (i < mf->count - 1) ? "," : "");
   }
 

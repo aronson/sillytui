@@ -15,7 +15,10 @@ typedef struct {
   char base_url[MAX_URL_LEN];
   char api_key[MAX_KEY_LEN];
   char model_id[MAX_MODEL_ID_LEN];
+  int context_length; // Max context in tokens (default: 8192)
 } ModelConfig;
+
+#define DEFAULT_CONTEXT_LENGTH 8192
 
 typedef struct {
   ModelConfig models[MAX_MODELS];

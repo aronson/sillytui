@@ -337,9 +337,6 @@ bool character_load_json(CharacterCard *card, const char *path) {
   return result;
 }
 
-static const char base64_chars[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
 static int base64_decode_char(char c) {
   if (c >= 'A' && c <= 'Z')
     return c - 'A';

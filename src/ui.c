@@ -1069,6 +1069,7 @@ static void load_chat_suggestions_for_character(SuggestionBox *sb,
 
 bool suggestion_box_update(SuggestionBox *sb, const char *filter,
                            WINDOW *parent, int parent_y, int parent_x) {
+  (void)parent; // Reserved for future use
   if (!filter || filter[0] != '/') {
     bool was_open = sb->win != NULL;
     suggestion_box_close(sb);

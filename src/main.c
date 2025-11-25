@@ -134,6 +134,7 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
                          ModelsFile *mf, int *selected_msg,
                          const LLMContext *llm_ctx, const char *user_name,
                          const char *bot_name) {
+  (void)user_input; // Reserved for future use
   ModelConfig *model = config_get_active(mf);
   const char *model_name = get_model_name(mf);
   if (!model) {
@@ -1056,11 +1057,6 @@ int main(void) {
             LLMContext llm_ctx = {.character =
                                       character_loaded ? &character : NULL,
                                   .persona = &persona};
-            size_t user_msg_idx = selected_msg > 0 ? selected_msg - 1 : 0;
-            const char *user_msg = history_get(&history, user_msg_idx);
-            const char *user_input = "";
-            if (user_msg && strncmp(user_msg, "You: ", 5) == 0)
-              user_input = user_msg + 5;
 
             history_add_swipe(&history, selected_msg, "Bot: *thinking*");
             ui_draw_chat(chat_win, &history, selected_msg,
