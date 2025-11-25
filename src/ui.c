@@ -239,7 +239,8 @@ typedef struct {
 } DisplayLine;
 
 static int build_display_lines(const ChatHistory *history, int content_width,
-                               DisplayLine *lines, int max_lines) {
+                               DisplayLine *lines, int max_lines,
+                               const InPlaceEdit *edit) {
   int total = 0;
   int gutter_width = 3;
   int text_width = content_width - gutter_width;
@@ -254,16 +255,24 @@ static int build_display_lines(const ChatHistory *history, int content_width,
     const char *msg = history_get(history, i);
     if (!msg)
       continue;
-    const char *content = msg;
+
+    bool use_edit_buffer =
+        edit && edit->active && edit->msg_index == (int)i && edit->buffer;
+
+    const char *content;
     bool is_user = starts_with(msg, "You: ");
     bool is_bot = starts_with(msg, "Bot:");
 
-    if (is_user) {
+    if (use_edit_buffer) {
+      content = edit->buffer;
+    } else if (is_user) {
       content = msg + 5;
     } else if (is_bot) {
       content = msg + 4;
       while (*content == ' ')
         content++;
+    } else {
+      content = msg;
     }
 
     if ((is_user || is_bot) && total < max_lines) {
@@ -361,7 +370,7 @@ int ui_get_total_lines(WINDOW *chat_win, const ChatHistory *history) {
 }
 
 int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
-                             int selected_msg) {
+                             int selected_msg, const InPlaceEdit *edit) {
   if (selected_msg < 0 || history->count == 0)
     return -1;
 
@@ -378,7 +387,7 @@ int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
     return -1;
 
   int total_display_lines =
-      build_display_lines(history, content_width, all_lines, max_display);
+      build_display_lines(history, content_width, all_lines, max_display, edit);
 
   int msg_start_line = -1;
   int msg_end_line = -1;
@@ -416,9 +425,10 @@ int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
   return target_scroll;
 }
 
-void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
-                  int selected_msg, const char *model_name,
-                  const char *user_name, const char *bot_name) {
+void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
+                     int selected_msg, const char *model_name,
+                     const char *user_name, const char *bot_name,
+                     bool show_edit_hints, InPlaceEdit *edit) {
   if (!user_name || !user_name[0])
     user_name = "You";
   if (!bot_name || !bot_name[0])
@@ -438,6 +448,20 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
   }
   draw_title(chat_win, title, COLOR_PAIR_TITLE);
 
+  if (edit && edit->active) {
+    if (g_ui_colors)
+      wattron(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    mvwaddstr(chat_win, height - 1, 3, " Enter:save  Esc:cancel ");
+    if (g_ui_colors)
+      wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+  } else if (show_edit_hints && selected_msg >= 0) {
+    if (g_ui_colors)
+      wattron(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    mvwaddstr(chat_win, height - 1, 3, " e:edit  d:delete  Enter:deselect ");
+    if (g_ui_colors)
+      wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+  }
+
   int usable_lines = height - 2;
   int content_width = width - 4;
   if (usable_lines <= 0 || content_width <= 0) {
@@ -453,7 +477,7 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
   }
 
   int total_display_lines =
-      build_display_lines(history, content_width, all_lines, max_display);
+      build_display_lines(history, content_width, all_lines, max_display, edit);
 
   int max_scroll = total_display_lines - usable_lines;
   if (max_scroll < 0)
@@ -461,7 +485,8 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
 
   int scroll_offset;
   if (selected_msg >= 0 && selected_msg < (int)history->count) {
-    scroll_offset = ui_get_msg_scroll_offset(chat_win, history, selected_msg);
+    scroll_offset =
+        ui_get_msg_scroll_offset(chat_win, history, selected_msg, edit);
     if (scroll_offset < 0)
       scroll_offset = max_scroll;
   } else {
@@ -550,15 +575,99 @@ void ui_draw_chat(WINDOW *chat_win, const ChatHistory *history,
         wattroff(chat_win, COLOR_PAIR(pair) | A_DIM);
     }
 
-    char line_buf[512];
-    int to_copy = dl->line_len;
-    if (to_copy > (int)sizeof(line_buf) - 1)
-      to_copy = (int)sizeof(line_buf) - 1;
-    strncpy(line_buf, dl->line_start, to_copy);
-    line_buf[to_copy] = '\0';
+    bool is_editing_this_msg = edit && edit->active &&
+                               dl->msg_index == edit->msg_index &&
+                               !dl->is_name_line;
 
-    markdown_render_line_bg(chat_win, y, x + gutter_width, text_width, line_buf,
-                            dl->initial_style, bg_color);
+    if (is_editing_this_msg) {
+      int edit_line_in_msg = 0;
+      int cursor_line = 0, cursor_col = 0;
+      int col = 0;
+      for (int i = 0; i < edit->cursor_pos && i < edit->buf_len; i++) {
+        if (edit->buffer[i] == '\n') {
+          cursor_line++;
+          col = 0;
+        } else {
+          col++;
+          if (col >= text_width) {
+            cursor_line++;
+            col = 0;
+          }
+        }
+      }
+      cursor_col = col;
+
+      col = 0;
+      for (int i = 0; i < start_line + row; i++) {
+        if (i < total_display_lines &&
+            all_lines[i].msg_index == edit->msg_index &&
+            !all_lines[i].is_name_line && !all_lines[i].is_spacer) {
+          edit_line_in_msg++;
+        }
+      }
+
+      int line_start_pos = 0;
+      int cur_line = 0;
+      col = 0;
+      for (int i = 0; i <= edit->buf_len; i++) {
+        if (cur_line == edit_line_in_msg) {
+          line_start_pos = i;
+          break;
+        }
+        if (i < edit->buf_len) {
+          if (edit->buffer[i] == '\n') {
+            cur_line++;
+            col = 0;
+          } else {
+            col++;
+            if (col >= text_width) {
+              cur_line++;
+              col = 0;
+            }
+          }
+        }
+      }
+
+      char line_buf[512];
+      int line_len = 0;
+      col = 0;
+      for (int i = line_start_pos; i < edit->buf_len && line_len < text_width;
+           i++) {
+        if (edit->buffer[i] == '\n')
+          break;
+        line_buf[line_len++] = edit->buffer[i];
+        col++;
+        if (col >= text_width)
+          break;
+      }
+      line_buf[line_len] = '\0';
+
+      if (g_ui_colors)
+        wattron(chat_win, COLOR_PAIR(COLOR_PAIR_MSG_SELECTED));
+      mvwaddstr(chat_win, y, x + gutter_width, line_buf);
+      for (int pad = line_len; pad < text_width; pad++)
+        waddch(chat_win, ' ');
+      if (g_ui_colors)
+        wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_MSG_SELECTED));
+
+      if (cursor_line == edit_line_in_msg) {
+        int cursor_x = x + gutter_width + cursor_col;
+        char ch = (cursor_col < line_len) ? line_buf[cursor_col] : ' ';
+        wattron(chat_win, A_REVERSE);
+        mvwaddch(chat_win, y, cursor_x, ch);
+        wattroff(chat_win, A_REVERSE);
+      }
+    } else {
+      char line_buf[512];
+      int to_copy = dl->line_len;
+      if (to_copy > (int)sizeof(line_buf) - 1)
+        to_copy = (int)sizeof(line_buf) - 1;
+      strncpy(line_buf, dl->line_start, to_copy);
+      line_buf[to_copy] = '\0';
+
+      markdown_render_line_bg(chat_win, y, x + gutter_width, text_width,
+                              line_buf, dl->initial_style, bg_color);
+    }
   }
 
   if (total_display_lines > usable_lines) {
@@ -681,7 +790,8 @@ int ui_line_col_to_cursor(const char *buffer, int target_line, int target_col,
 }
 
 void ui_draw_input_multiline(WINDOW *input_win, const char *buffer,
-                             int cursor_pos, bool focused, int scroll_line) {
+                             int cursor_pos, bool focused, int scroll_line,
+                             bool editing_mode) {
   werase(input_win);
   draw_rounded_box(input_win, COLOR_PAIR_BORDER, focused);
 
@@ -692,6 +802,21 @@ void ui_draw_input_multiline(WINDOW *input_win, const char *buffer,
   if (text_width < 10)
     text_width = 10;
   int visible_lines = h - 2;
+
+  if (editing_mode) {
+    if (g_ui_colors)
+      wattron(input_win, COLOR_PAIR(COLOR_PAIR_LOADING) | A_BOLD);
+    mvwaddstr(input_win, 0, 2, " Editing ");
+    if (g_ui_colors)
+      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_LOADING) | A_BOLD);
+    if (g_ui_colors)
+      wattron(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    int hint_x = w - 22;
+    if (hint_x > 10)
+      mvwaddstr(input_win, 0, hint_x, " Enter:save  Esc:cancel ");
+    if (g_ui_colors)
+      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+  }
 
   if (focused) {
     if (g_ui_colors)

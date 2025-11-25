@@ -177,6 +177,47 @@ void modal_open_greeting_select(Modal *m, const CharacterCard *card) {
   create_window(m, height, 60);
 }
 
+void modal_open_message_edit(Modal *m, int msg_index, const char *content) {
+  modal_close(m);
+  m->type = MODAL_MESSAGE_EDIT;
+  m->edit_msg_index = msg_index;
+  m->edit_buffer[0] = '\0';
+  m->edit_cursor = 0;
+  m->edit_len = 0;
+  m->edit_scroll = 0;
+
+  if (content) {
+    const char *text = content;
+    if (strncmp(content, "You: ", 5) == 0) {
+      text = content + 5;
+    } else if (strncmp(content, "Bot: ", 5) == 0) {
+      text = content + 5;
+    } else if (strncmp(content, "Bot:", 4) == 0) {
+      text = content + 4;
+      while (*text == ' ')
+        text++;
+    }
+    strncpy(m->edit_buffer, text, sizeof(m->edit_buffer) - 1);
+    m->edit_buffer[sizeof(m->edit_buffer) - 1] = '\0';
+    m->edit_len = (int)strlen(m->edit_buffer);
+    m->edit_cursor = m->edit_len;
+  }
+
+  create_window(m, 14, 70);
+}
+
+void modal_open_message_delete(Modal *m, int msg_index) {
+  modal_close(m);
+  m->type = MODAL_MESSAGE_DELETE_CONFIRM;
+  m->edit_msg_index = msg_index;
+  m->field_index = 0;
+  create_window(m, 7, 45);
+}
+
+int modal_get_edit_msg_index(const Modal *m) { return m->edit_msg_index; }
+
+const char *modal_get_edit_content(const Modal *m) { return m->edit_buffer; }
+
 void modal_close(Modal *m) {
   if (m->win) {
     delwin(m->win);
@@ -724,6 +765,126 @@ static void draw_greeting_select(Modal *m) {
   wrefresh(w);
 }
 
+static void draw_message_edit(Modal *m) {
+  WINDOW *w = m->win;
+  werase(w);
+  draw_box_fancy(w, m->height, m->width);
+  draw_title(w, m->width, "Edit Message");
+
+  int text_w = m->width - 6;
+  int text_h = m->height - 6;
+
+  wattron(w, COLOR_PAIR(COLOR_PAIR_BORDER));
+  mvwaddstr(w, 2, 2, "╭");
+  for (int x = 3; x < m->width - 3; x++)
+    mvwaddstr(w, 2, x, "─");
+  mvwaddstr(w, 2, m->width - 3, "╮");
+  for (int y = 3; y < 3 + text_h; y++) {
+    mvwaddstr(w, y, 2, "│");
+    mvwaddstr(w, y, m->width - 3, "│");
+  }
+  mvwaddstr(w, 3 + text_h, 2, "╰");
+  for (int x = 3; x < m->width - 3; x++)
+    mvwaddstr(w, 3 + text_h, x, "─");
+  mvwaddstr(w, 3 + text_h, m->width - 3, "╯");
+  wattroff(w, COLOR_PAIR(COLOR_PAIR_BORDER));
+
+  int line = 0;
+  int col = 0;
+  int cursor_line = 0;
+  int cursor_col = 0;
+
+  for (int i = 0; i < m->edit_len; i++) {
+    if (i == m->edit_cursor) {
+      cursor_line = line;
+      cursor_col = col;
+    }
+    if (m->edit_buffer[i] == '\n') {
+      line++;
+      col = 0;
+    } else {
+      col++;
+      if (col >= text_w) {
+        line++;
+        col = 0;
+      }
+    }
+  }
+  if (m->edit_cursor == m->edit_len) {
+    cursor_line = line;
+    cursor_col = col;
+  }
+
+  if (cursor_line < m->edit_scroll)
+    m->edit_scroll = cursor_line;
+  if (cursor_line >= m->edit_scroll + text_h)
+    m->edit_scroll = cursor_line - text_h + 1;
+
+  line = 0;
+  col = 0;
+  int display_line = 0;
+  for (int i = 0; i < m->edit_len && display_line < text_h; i++) {
+    if (line >= m->edit_scroll) {
+      display_line = line - m->edit_scroll;
+      if (display_line < text_h) {
+        int y = 3 + display_line;
+        int x = 3 + col;
+
+        if (i == m->edit_cursor) {
+          wattron(w, A_REVERSE);
+          mvwaddch(w, y, x,
+                   m->edit_buffer[i] == '\n' ? ' ' : m->edit_buffer[i]);
+          wattroff(w, A_REVERSE);
+        } else if (m->edit_buffer[i] != '\n') {
+          mvwaddch(w, y, x, m->edit_buffer[i]);
+        }
+      }
+    }
+
+    if (m->edit_buffer[i] == '\n') {
+      line++;
+      col = 0;
+    } else {
+      col++;
+      if (col >= text_w) {
+        line++;
+        col = 0;
+      }
+    }
+  }
+
+  if (m->edit_cursor == m->edit_len) {
+    int y = 3 + cursor_line - m->edit_scroll;
+    int x = 3 + cursor_col;
+    if (y >= 3 && y < 3 + text_h) {
+      wattron(w, A_REVERSE);
+      mvwaddch(w, y, x, ' ');
+      wattroff(w, A_REVERSE);
+    }
+  }
+
+  int btn_y = m->height - 2;
+  draw_button(w, btn_y, m->width / 2 - 10, "Save", m->field_index == 0);
+  draw_button(w, btn_y, m->width / 2 + 2, "Cancel", m->field_index == 1);
+
+  wrefresh(w);
+}
+
+static void draw_message_delete_confirm(Modal *m) {
+  WINDOW *w = m->win;
+  werase(w);
+  draw_box_fancy(w, m->height, m->width);
+  draw_title(w, m->width, "Delete Message?");
+
+  mvwprintw(w, 2, 3, "Delete this message permanently?");
+
+  int btn_y = m->height - 2;
+  draw_button(w, btn_y, m->width / 2 - 10, "Delete", m->field_index == 0);
+  draw_button(w, btn_y, m->width / 2 + 2, "Cancel", m->field_index == 1);
+
+  wrefresh(w);
+}
+
 void modal_draw(Modal *m, const ModelsFile *mf) {
   if (!m->win)
     return;
@@ -758,6 +919,12 @@ void modal_draw(Modal *m, const ModelsFile *mf) {
     break;
   case MODAL_GREETING_SELECT:
     draw_greeting_select(m);
+    break;
+  case MODAL_MESSAGE_EDIT:
+    draw_message_edit(m);
+    break;
+  case MODAL_MESSAGE_DELETE_CONFIRM:
+    draw_message_delete_confirm(m);
     break;
   default:
     break;
@@ -1221,6 +1388,188 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       }
       modal_close(m);
       return MODAL_RESULT_GREETING_SELECTED;
+    }
+    return MODAL_RESULT_NONE;
+  }
+
+  if (m->type == MODAL_MESSAGE_EDIT) {
+    if (ch == 27) {
+      modal_close(m);
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == '\t') {
+      m->field_index = 1 - m->field_index;
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == '\n' || ch == '\r') {
+      if (m->field_index == 1) {
+        modal_close(m);
+        return MODAL_RESULT_NONE;
+      }
+      modal_close(m);
+      return MODAL_RESULT_MESSAGE_EDITED;
+    }
+
+    if (ch == KEY_LEFT) {
+      if (m->edit_cursor > 0)
+        m->edit_cursor--;
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == KEY_RIGHT) {
+      if (m->edit_cursor < m->edit_len)
+        m->edit_cursor++;
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == KEY_UP) {
+      int text_w = m->width - 6;
+      int line = 0, col = 0;
+      for (int i = 0; i < m->edit_cursor; i++) {
+        if (m->edit_buffer[i] == '\n') {
+          line++;
+          col = 0;
+        } else {
+          col++;
+          if (col >= text_w) {
+            line++;
+            col = 0;
+          }
+        }
+      }
+      if (line > 0) {
+        int target_line = line - 1;
+        int cur_line = 0, cur_col = 0;
+        for (int i = 0; i <= m->edit_len; i++) {
+          if (cur_line == target_line && cur_col == col) {
+            m->edit_cursor = i;
+            break;
+          }
+          if (cur_line > target_line) {
+            m->edit_cursor = i > 0 ? i - 1 : 0;
+            break;
+          }
+          if (i < m->edit_len) {
+            if (m->edit_buffer[i] == '\n') {
+              if (cur_line == target_line) {
+                m->edit_cursor = i;
+                break;
+              }
+              cur_line++;
+              cur_col = 0;
+            } else {
+              cur_col++;
+              if (cur_col >= text_w) {
+                if (cur_line == target_line) {
+                  m->edit_cursor = i + 1;
+                  break;
+                }
+                cur_line++;
+                cur_col = 0;
+              }
+            }
+          }
+        }
+      }
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == KEY_DOWN) {
+      int text_w = m->width - 6;
+      int line = 0, col = 0;
+      for (int i = 0; i < m->edit_cursor; i++) {
+        if (m->edit_buffer[i] == '\n') {
+          line++;
+          col = 0;
+        } else {
+          col++;
+          if (col >= text_w) {
+            line++;
+            col = 0;
+          }
+        }
+      }
+      int target_line = line + 1;
+      int cur_line = 0, cur_col = 0;
+      for (int i = 0; i <= m->edit_len; i++) {
+        if (cur_line == target_line && cur_col == col) {
+          m->edit_cursor = i;
+          break;
+        }
+        if (cur_line > target_line) {
+          m->edit_cursor = i > 0 ? i - 1 : 0;
+          break;
+        }
+        if (i < m->edit_len) {
+          if (m->edit_buffer[i] == '\n') {
+            if (cur_line == target_line) {
+              m->edit_cursor = i;
+              break;
+            }
+            cur_line++;
+            cur_col = 0;
+          } else {
+            cur_col++;
+            if (cur_col >= text_w) {
+              if (cur_line == target_line) {
+                m->edit_cursor = i + 1;
+                break;
+              }
+              cur_line++;
+              cur_col = 0;
+            }
+          }
+        }
+      }
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+      if (m->edit_cursor > 0) {
+        memmove(&m->edit_buffer[m->edit_cursor - 1],
+                &m->edit_buffer[m->edit_cursor],
+                m->edit_len - m->edit_cursor + 1);
+        m->edit_cursor--;
+        m->edit_len--;
+      }
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == KEY_DC) {
+      if (m->edit_cursor < m->edit_len) {
+        memmove(&m->edit_buffer[m->edit_cursor],
+                &m->edit_buffer[m->edit_cursor + 1],
+                m->edit_len - m->edit_cursor);
+        m->edit_len--;
+      }
+      return MODAL_RESULT_NONE;
+    }
+    if ((ch >= 32 && ch < 127) || ch == '\n') {
+      if (m->edit_len < (int)sizeof(m->edit_buffer) - 1) {
+        memmove(&m->edit_buffer[m->edit_cursor + 1],
+                &m->edit_buffer[m->edit_cursor],
+                m->edit_len - m->edit_cursor + 1);
+        m->edit_buffer[m->edit_cursor] = (char)ch;
+        m->edit_cursor++;
+        m->edit_len++;
+      }
+      return MODAL_RESULT_NONE;
+    }
+    return MODAL_RESULT_NONE;
+  }
+
+  if (m->type == MODAL_MESSAGE_DELETE_CONFIRM) {
+    if (ch == 27) {
+      modal_close(m);
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == '\t' || ch == KEY_LEFT || ch == KEY_RIGHT) {
+      m->field_index = 1 - m->field_index;
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == '\n' || ch == '\r') {
+      if (m->field_index == 0) {
+        modal_close(m);
+        return MODAL_RESULT_MESSAGE_DELETED;
+      } else {
+        modal_close(m);
+        return MODAL_RESULT_NONE;
+      }
     }
     return MODAL_RESULT_NONE;
   }

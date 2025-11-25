@@ -19,7 +19,9 @@ typedef enum {
   MODAL_EXIT_CONFIRM,
   MODAL_PERSONA_EDIT,
   MODAL_CHARACTER_INFO,
-  MODAL_GREETING_SELECT
+  MODAL_GREETING_SELECT,
+  MODAL_MESSAGE_EDIT,
+  MODAL_MESSAGE_DELETE_CONFIRM
 } ModalType;
 
 typedef struct {
@@ -48,6 +50,12 @@ typedef struct {
   char pending_save_title[CHAT_TITLE_MAX];
   char existing_chat_id[CHAT_ID_MAX];
 
+  int edit_msg_index;
+  char edit_buffer[4096];
+  int edit_cursor;
+  int edit_len;
+  int edit_scroll;
+
   bool exit_dont_ask;
 
   const CharacterCard *character;
@@ -63,7 +71,9 @@ typedef enum {
   MODAL_RESULT_EXIT_CONFIRMED,
   MODAL_RESULT_EXIT_CANCELLED,
   MODAL_RESULT_PERSONA_SAVED,
-  MODAL_RESULT_GREETING_SELECTED
+  MODAL_RESULT_GREETING_SELECTED,
+  MODAL_RESULT_MESSAGE_EDITED,
+  MODAL_RESULT_MESSAGE_DELETED
 } ModalResult;
 
 void modal_init(Modal *m);
@@ -77,6 +87,10 @@ void modal_open_exit_confirm(Modal *m);
 void modal_open_persona_edit(Modal *m, const Persona *persona);
 void modal_open_character_info(Modal *m, const CharacterCard *card);
 void modal_open_greeting_select(Modal *m, const CharacterCard *card);
+void modal_open_message_edit(Modal *m, int msg_index, const char *content);
+void modal_open_message_delete(Modal *m, int msg_index);
+int modal_get_edit_msg_index(const Modal *m);
+const char *modal_get_edit_content(const Modal *m);
 void modal_close(Modal *m);
 void modal_draw(Modal *m, const ModelsFile *mf);
 ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,

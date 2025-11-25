@@ -106,6 +106,35 @@ const char *history_get(const ChatHistory *history, size_t index) {
   return msg->swipes[msg->active_swipe];
 }
 
+const char *history_get_swipe(const ChatHistory *history, size_t msg_index,
+                              size_t swipe_index) {
+  if (msg_index >= history->count)
+    return NULL;
+
+  ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count)
+    return NULL;
+
+  return msg->swipes[swipe_index];
+}
+
+void history_update_swipe(ChatHistory *history, size_t msg_index,
+                          size_t swipe_index, const char *message) {
+  if (msg_index >= history->count)
+    return;
+
+  ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count)
+    return;
+
+  char *copy = dup_string(message);
+  if (!copy)
+    return;
+
+  free(msg->swipes[swipe_index]);
+  msg->swipes[swipe_index] = copy;
+}
+
 size_t history_add_swipe(ChatHistory *history, size_t msg_index,
                          const char *content) {
   if (msg_index >= history->count)
@@ -153,4 +182,22 @@ size_t history_get_active_swipe(const ChatHistory *history, size_t msg_index) {
   if (msg_index >= history->count)
     return 0;
   return history->messages[msg_index].active_swipe;
+}
+
+bool history_delete(ChatHistory *history, size_t index) {
+  if (index >= history->count)
+    return false;
+
+  ChatMessage *msg = &history->messages[index];
+  for (size_t i = 0; i < msg->swipe_count; i++) {
+    free(msg->swipes[i]);
+  }
+  free(msg->swipes);
+
+  for (size_t i = index; i < history->count - 1; i++) {
+    history->messages[i] = history->messages[i + 1];
+  }
+  history->count--;
+
+  return true;
 }

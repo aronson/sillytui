@@ -24,11 +24,16 @@ size_t history_add(ChatHistory *history, const char *message);
 void history_update(ChatHistory *history, size_t index, const char *message);
 
 const char *history_get(const ChatHistory *history, size_t index);
+const char *history_get_swipe(const ChatHistory *history, size_t msg_index,
+                              size_t swipe_index);
+void history_update_swipe(ChatHistory *history, size_t msg_index,
+                          size_t swipe_index, const char *message);
 size_t history_add_swipe(ChatHistory *history, size_t msg_index,
                          const char *content);
 bool history_set_active_swipe(ChatHistory *history, size_t msg_index,
                               size_t swipe_index);
 size_t history_get_swipe_count(const ChatHistory *history, size_t msg_index);
 size_t history_get_active_swipe(const ChatHistory *history, size_t msg_index);
+bool history_delete(ChatHistory *history, size_t index);
 
 #endif

@@ -90,8 +90,8 @@ static void stream_callback(const char *chunk, void *userdata) {
   history_update(ctx->history, ctx->msg_index, display);
   *ctx->selected_msg = MSG_SELECT_NONE;
   ui_draw_chat(ctx->chat_win, ctx->history, *ctx->selected_msg, ctx->model_name,
-               ctx->user_name, ctx->bot_name);
-  ui_draw_input_multiline(ctx->input_win, "", 0, true, 0);
+               ctx->user_name, ctx->bot_name, false);
+  ui_draw_input_multiline(ctx->input_win, "", 0, true, 0, false);
 }
 
 static void progress_callback(void *userdata) {
@@ -110,8 +110,8 @@ static void progress_callback(void *userdata) {
            SPINNER_FRAMES[ctx->spinner_frame]);
   history_update(ctx->history, ctx->msg_index, display);
   ui_draw_chat(ctx->chat_win, ctx->history, *ctx->selected_msg, ctx->model_name,
-               ctx->user_name, ctx->bot_name);
-  ui_draw_input_multiline(ctx->input_win, "", 0, true, 0);
+               ctx->user_name, ctx->bot_name, false);
+  ui_draw_input_multiline(ctx->input_win, "", 0, true, 0, false);
 }
 
 static const char *get_model_name(ModelsFile *mf) {
@@ -140,7 +140,8 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
     history_add(history, "Bot: *looks confused* \"No model configured. Use "
                          "/model set to add one.\"");
     *selected_msg = MSG_SELECT_NONE;
-    ui_draw_chat(chat_win, history, *selected_msg, NULL, user_name, bot_name);
+    ui_draw_chat(chat_win, history, *selected_msg, NULL, user_name, bot_name,
+                 false);
     return;
   }
 
@@ -149,8 +150,8 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
     return;
   *selected_msg = MSG_SELECT_NONE;
   ui_draw_chat(chat_win, history, *selected_msg, model_name, user_name,
-               bot_name);
-  ui_draw_input_multiline(input_win, "", 0, true, 0);
+               bot_name, false);
+  ui_draw_input_multiline(input_win, "", 0, true, 0, false);
 
   StreamContext ctx = {.history = history,
                        .chat_win = chat_win,
@@ -180,12 +181,12 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
     history_update(history, msg_index, err_msg);
     *selected_msg = MSG_SELECT_NONE;
     ui_draw_chat(chat_win, history, *selected_msg, model_name, user_name,
-                 bot_name);
+                 bot_name, false);
   } else if (ctx.buf_len == 0) {
     history_update(history, msg_index, "Bot: *stays silent*");
     *selected_msg = MSG_SELECT_NONE;
     ui_draw_chat(chat_win, history, *selected_msg, model_name, user_name,
-                 bot_name);
+                 bot_name, false);
   }
 
   free(ctx.buffer);
@@ -475,6 +476,12 @@ int main(void) {
   char current_chat_id[CHAT_ID_MAX] = {0};
   char current_char_path[CHAT_CHAR_PATH_MAX] = {0};
 
+  InPlaceEdit in_place_edit = {0};
+  in_place_edit.buf_cap = INPUT_MAX;
+  in_place_edit.buffer = malloc(in_place_edit.buf_cap);
+  if (in_place_edit.buffer)
+    in_place_edit.buffer[0] = '\0';
+
   if (models.count == 0) {
     history_add(
         &history,
@@ -498,9 +505,9 @@ int main(void) {
   const char *user_disp = get_user_display_name(&persona);
   const char *bot_disp = get_bot_display_name(&character, character_loaded);
   ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-               user_disp, bot_disp);
+               user_disp, bot_disp, false);
   ui_draw_input_multiline(input_win, input_buffer, cursor_pos, input_focused,
-                          input_scroll_line);
+                          input_scroll_line, false);
 
   while (running) {
     user_disp = get_user_display_name(&persona);
@@ -513,9 +520,9 @@ int main(void) {
       selected_msg = MSG_SELECT_NONE;
       input_focused = true;
       ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                   user_disp, bot_disp);
+                   user_disp, bot_disp, false);
       ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                              input_focused, input_scroll_line);
+                              input_focused, input_scroll_line, false);
       if (modal_is_open(&modal)) {
         modal_close(&modal);
       }
@@ -579,25 +586,56 @@ int main(void) {
           input_focused = true;
         }
       }
+      if (result == MODAL_RESULT_MESSAGE_EDITED) {
+        int msg_idx = modal_get_edit_msg_index(&modal);
+        const char *new_content = modal_get_edit_content(&modal);
+        if (msg_idx >= 0 && msg_idx < (int)history.count && new_content) {
+          const char *old_msg = history_get(&history, msg_idx);
+          char new_msg[4096];
+          if (old_msg && strncmp(old_msg, "You: ", 5) == 0) {
+            snprintf(new_msg, sizeof(new_msg), "You: %s", new_content);
+          } else {
+            snprintf(new_msg, sizeof(new_msg), "Bot: %s", new_content);
+          }
+          history_update(&history, msg_idx, new_msg);
+        }
+        selected_msg = MSG_SELECT_NONE;
+        input_focused = true;
+      }
+      if (result == MODAL_RESULT_MESSAGE_DELETED) {
+        int msg_idx = modal_get_edit_msg_index(&modal);
+        if (msg_idx >= 0 && msg_idx < (int)history.count) {
+          history_delete(&history, msg_idx);
+        }
+        selected_msg = MSG_SELECT_NONE;
+        input_focused = true;
+      }
       if (modal_is_open(&modal)) {
         modal_draw(&modal, &models);
       } else {
         touchwin(chat_win);
         touchwin(input_win);
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                     user_disp, bot_disp);
+                     user_disp, bot_disp, false);
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
       }
       continue;
     }
 
     if (ch == 27) {
+      if (in_place_edit.active) {
+        in_place_edit.active = false;
+        ui_draw_chat_ex(chat_win, &history, selected_msg,
+                        get_model_name(&models), user_disp, bot_disp, true,
+                        NULL);
+        continue;
+      }
       if (suggestion_box_is_open(&suggestions)) {
         suggestion_box_close(&suggestions);
         touchwin(chat_win);
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                     user_disp, bot_disp);
+                     user_disp, bot_disp, false);
         continue;
       }
       if (settings.skip_exit_confirm) {
@@ -633,9 +671,9 @@ int main(void) {
         suggestion_box_close(&suggestions);
         touchwin(chat_win);
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                     user_disp, bot_disp);
+                     user_disp, bot_disp, false);
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
         if (ch == '\n' || ch == '\r') {
           goto process_enter;
         }
@@ -644,6 +682,62 @@ int main(void) {
     }
 
     if (ch == KEY_UP) {
+      if (in_place_edit.active) {
+        int text_width = getmaxx(chat_win) - 10;
+        if (text_width < 10)
+          text_width = 10;
+        int line = 0, col = 0;
+        for (int i = 0; i < in_place_edit.cursor_pos; i++) {
+          if (in_place_edit.buffer[i] == '\n') {
+            line++;
+            col = 0;
+          } else {
+            col++;
+            if (col >= text_width) {
+              line++;
+              col = 0;
+            }
+          }
+        }
+        if (line > 0) {
+          int target_line = line - 1;
+          int cur_line = 0, cur_col = 0;
+          for (int i = 0; i <= in_place_edit.buf_len; i++) {
+            if (cur_line == target_line && cur_col == col) {
+              in_place_edit.cursor_pos = i;
+              break;
+            }
+            if (cur_line > target_line) {
+              in_place_edit.cursor_pos = i > 0 ? i - 1 : 0;
+              break;
+            }
+            if (i < in_place_edit.buf_len) {
+              if (in_place_edit.buffer[i] == '\n') {
+                if (cur_line == target_line) {
+                  in_place_edit.cursor_pos = i;
+                  break;
+                }
+                cur_line++;
+                cur_col = 0;
+              } else {
+                cur_col++;
+                if (cur_col >= text_width) {
+                  if (cur_line == target_line) {
+                    in_place_edit.cursor_pos = i + 1;
+                    break;
+                  }
+                  cur_line++;
+                  cur_col = 0;
+                }
+              }
+            }
+          }
+          ui_draw_chat_ex(chat_win, &history, selected_msg,
+                          get_model_name(&models), user_disp, bot_disp, false,
+                          &in_place_edit);
+        }
+        continue;
+      }
       if (input_focused && input_len > 0) {
         int text_width = getmaxx(input_win) - 6;
         if (text_width < 10)
@@ -656,7 +750,7 @@ int main(void) {
           if (cur.line - 1 < input_scroll_line)
             input_scroll_line = cur.line - 1;
           ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                  input_focused, input_scroll_line);
+                                  input_focused, input_scroll_line, false);
           continue;
         }
       }
@@ -669,13 +763,67 @@ int main(void) {
         selected_msg--;
       }
       ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                   user_disp, bot_disp);
+                   user_disp, bot_disp, !input_focused);
       ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                              input_focused, input_scroll_line);
+                              input_focused, input_scroll_line, false);
       continue;
     }
 
     if (ch == KEY_DOWN) {
+      if (in_place_edit.active) {
+        int text_width = getmaxx(chat_win) - 10;
+        if (text_width < 10)
+          text_width = 10;
+        int line = 0, col = 0;
+        for (int i = 0; i < in_place_edit.cursor_pos; i++) {
+          if (in_place_edit.buffer[i] == '\n') {
+            line++;
+            col = 0;
+          } else {
+            col++;
+            if (col >= text_width) {
+              line++;
+              col = 0;
+            }
+          }
+        }
+        int target_line = line + 1;
+        int cur_line = 0, cur_col = 0;
+        for (int i = 0; i <= in_place_edit.buf_len; i++) {
+          if (cur_line == target_line && cur_col == col) {
+            in_place_edit.cursor_pos = i;
+            break;
+          }
+          if (cur_line > target_line) {
+            in_place_edit.cursor_pos = i > 0 ? i - 1 : 0;
+            break;
+          }
+          if (i < in_place_edit.buf_len) {
+            if (in_place_edit.buffer[i] == '\n') {
+              if (cur_line == target_line) {
+                in_place_edit.cursor_pos = i;
+                break;
+              }
+              cur_line++;
+              cur_col = 0;
+            } else {
+              cur_col++;
+              if (cur_col >= text_width) {
+                if (cur_line == target_line) {
+                  in_place_edit.cursor_pos = i + 1;
+                  break;
+                }
+                cur_line++;
+                cur_col = 0;
+              }
+            }
+          }
+        }
+        ui_draw_chat_ex(chat_win, &history, selected_msg,
+                        get_model_name(&models), user_disp, bot_disp, false,
+                        &in_place_edit);
+        continue;
+      }
       if (input_focused && input_len > 0) {
         int text_width = getmaxx(input_win) - 6;
         if (text_width < 10)
@@ -690,7 +838,7 @@ int main(void) {
           if (cur.line + 1 >= input_scroll_line + visible_lines)
             input_scroll_line = cur.line + 2 - visible_lines;
           ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                  input_focused, input_scroll_line);
+                                  input_focused, input_scroll_line, false);
           continue;
         }
       }
@@ -703,17 +851,26 @@ int main(void) {
         input_focused = true;
       }
       ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                   user_disp, bot_disp);
+                   user_disp, bot_disp, !input_focused);
       ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                              input_focused, input_scroll_line);
+                              input_focused, input_scroll_line, false);
       continue;
     }
 
     if (ch == KEY_LEFT) {
+      if (in_place_edit.active) {
+        if (in_place_edit.cursor_pos > 0) {
+          in_place_edit.cursor_pos--;
+          ui_draw_chat_ex(chat_win, &history, selected_msg,
+                          get_model_name(&models), user_disp, bot_disp, false,
+                          &in_place_edit);
+        }
+        continue;
+      }
       if (input_focused && cursor_pos > 0) {
         cursor_pos--;
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
       } else if (!input_focused && selected_msg >= 0) {
         const char *msg = history_get(&history, selected_msg);
         if (msg && (strncmp(msg, "Bot:", 4) == 0)) {
@@ -722,7 +879,7 @@ int main(void) {
           if (swipe_count > 1 && active > 0) {
             history_set_active_swipe(&history, selected_msg, active - 1);
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
           }
         }
       }
@@ -730,10 +887,19 @@ int main(void) {
     }
 
     if (ch == KEY_RIGHT) {
+      if (in_place_edit.active) {
+        if (in_place_edit.cursor_pos < in_place_edit.buf_len) {
+          in_place_edit.cursor_pos++;
+          ui_draw_chat_ex(chat_win, &history, selected_msg,
+                          get_model_name(&models), user_disp, bot_disp, false,
+                          &in_place_edit);
+        }
+        continue;
+      }
       if (input_focused && cursor_pos < input_len) {
         cursor_pos++;
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
       } else if (!input_focused && selected_msg >= 0) {
         const char *msg = history_get(&history, selected_msg);
         bool is_last_bot = (selected_msg == (int)history.count - 1) && msg &&
@@ -744,7 +910,7 @@ int main(void) {
           if (active + 1 < swipe_count) {
             history_set_active_swipe(&history, selected_msg, active + 1);
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
           } else {
             LLMContext llm_ctx = {.character =
                                       character_loaded ? &character : NULL,
@@ -757,7 +923,7 @@ int main(void) {
 
             history_add_swipe(&history, selected_msg, "Bot: *thinking*");
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
 
             ModelConfig *model = config_get_active(&models);
             const char *model_name = get_model_name(&models);
@@ -801,9 +967,9 @@ int main(void) {
             touchwin(chat_win);
             touchwin(input_win);
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
             ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                    input_focused, input_scroll_line);
+                                    input_focused, input_scroll_line, false);
           }
         } else if (msg && strncmp(msg, "Bot:", 4) == 0) {
           size_t swipe_count = history_get_swipe_count(&history, selected_msg);
@@ -811,7 +977,7 @@ int main(void) {
           if (active + 1 < swipe_count) {
             history_set_active_swipe(&history, selected_msg, active + 1);
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
           }
         }
       }
@@ -821,14 +987,114 @@ int main(void) {
     if (ch == KEY_HOME || ch == 1) {
       cursor_pos = 0;
       ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                              input_focused, input_scroll_line);
+                              input_focused, input_scroll_line, false);
       continue;
     }
 
     if (ch == KEY_END || ch == 5) {
       cursor_pos = input_len;
       ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                              input_focused, input_scroll_line);
+                              input_focused, input_scroll_line, false);
+      continue;
+    }
+
+    if (ch == 'e' && !input_focused && selected_msg >= 0 &&
+        selected_msg < (int)history.count && !in_place_edit.active) {
+      size_t current_swipe = history_get_active_swipe(&history, selected_msg);
+      const char *msg =
+          history_get_swipe(&history, selected_msg, current_swipe);
+      if (msg && in_place_edit.buffer) {
+        const char *content = msg;
+        if (strncmp(msg, "You: ", 5) == 0) {
+          content = msg + 5;
+        } else if (strncmp(msg, "Bot: ", 5) == 0) {
+          content = msg + 5;
+        } else if (strncmp(msg, "Bot:", 4) == 0) {
+          content = msg + 4;
+          while (*content == ' ')
+            content++;
+        }
+
+        strncpy(in_place_edit.buffer, content, in_place_edit.buf_cap - 1);
+        in_place_edit.buffer[in_place_edit.buf_cap - 1] = '\0';
+        in_place_edit.buf_len = (int)strlen(in_place_edit.buffer);
+        in_place_edit.cursor_pos = in_place_edit.buf_len;
+        in_place_edit.msg_index = selected_msg;
+        in_place_edit.swipe_index = (int)current_swipe;
+        in_place_edit.active = true;
+        in_place_edit.scroll_offset = 0;
+
+        ui_draw_chat_ex(chat_win, &history, selected_msg,
+                        get_model_name(&models), user_disp, bot_disp, false,
+                        &in_place_edit);
+      }
+      continue;
+    }
+
+    if (in_place_edit.active) {
+      if (ch == '\n' || ch == '\r') {
+        const char *old_msg = history_get_swipe(
+            &history, in_place_edit.msg_index, in_place_edit.swipe_index);
+        char new_msg[INPUT_MAX + 6];
+        if (old_msg && strncmp(old_msg, "You: ", 5) == 0) {
+          snprintf(new_msg, sizeof(new_msg), "You: %s", in_place_edit.buffer);
+        } else {
+          snprintf(new_msg, sizeof(new_msg), "Bot: %s", in_place_edit.buffer);
+        }
+        history_update_swipe(&history, in_place_edit.msg_index,
+                             in_place_edit.swipe_index, new_msg);
+        in_place_edit.active = false;
+        ui_draw_chat_ex(chat_win, &history, selected_msg,
+                        get_model_name(&models), user_disp, bot_disp, true,
+                        NULL);
+        continue;
+      }
+      if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+        if (in_place_edit.cursor_pos > 0) {
+          memmove(&in_place_edit.buffer[in_place_edit.cursor_pos - 1],
+                  &in_place_edit.buffer[in_place_edit.cursor_pos],
+                  in_place_edit.buf_len - in_place_edit.cursor_pos + 1);
+          in_place_edit.cursor_pos--;
+          in_place_edit.buf_len--;
+          ui_draw_chat_ex(chat_win, &history, selected_msg,
+                          get_model_name(&models), user_disp, bot_disp, false,
+                          &in_place_edit);
+        }
+        continue;
+      }
+      if (ch == KEY_DC) {
+        if (in_place_edit.cursor_pos < in_place_edit.buf_len) {
+          memmove(&in_place_edit.buffer[in_place_edit.cursor_pos],
+                  &in_place_edit.buffer[in_place_edit.cursor_pos + 1],
+                  in_place_edit.buf_len - in_place_edit.cursor_pos);
+          in_place_edit.buf_len--;
+          ui_draw_chat_ex(chat_win, &history, selected_msg,
+                          get_model_name(&models), user_disp, bot_disp, false,
+                          &in_place_edit);
+        }
+        continue;
+      }
+      if (ch >= 32 && ch < 127) {
+        if (in_place_edit.buf_len < in_place_edit.buf_cap - 1) {
+          memmove(&in_place_edit.buffer[in_place_edit.cursor_pos + 1],
+                  &in_place_edit.buffer[in_place_edit.cursor_pos],
+                  in_place_edit.buf_len - in_place_edit.cursor_pos + 1);
+          in_place_edit.buffer[in_place_edit.cursor_pos] = (char)ch;
+          in_place_edit.cursor_pos++;
+          in_place_edit.buf_len++;
+          ui_draw_chat_ex(chat_win, &history, selected_msg,
+                          get_model_name(&models), user_disp, bot_disp, false,
+                          &in_place_edit);
+        }
+        continue;
+      }
+      continue;
+    }
+
+    if (ch == 'd' && !input_focused && selected_msg >= 0 &&
+        selected_msg < (int)history.count && !in_place_edit.active) {
+      modal_open_message_delete(&modal, selected_msg);
+      modal_draw(&modal, &models);
       continue;
     }
 
@@ -840,9 +1106,9 @@ int main(void) {
         selected_msg = MSG_SELECT_NONE;
         input_focused = true;
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                     user_disp, bot_disp);
+                     user_disp, bot_disp, false);
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
         continue;
       }
 
@@ -851,7 +1117,7 @@ int main(void) {
         input_len = 0;
         cursor_pos = 0;
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
         continue;
       }
 
@@ -880,15 +1146,15 @@ int main(void) {
           if (modal_is_open(&modal)) {
             modal_draw(&modal, &models);
             ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                    input_focused, input_scroll_line);
+                                    input_focused, input_scroll_line, false);
           } else {
             selected_msg = MSG_SELECT_NONE;
             input_focused = true;
             touchwin(chat_win);
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
             ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                    input_focused, input_scroll_line);
+                                    input_focused, input_scroll_line, false);
           }
           continue;
         }
@@ -914,10 +1180,10 @@ int main(void) {
         selected_msg = MSG_SELECT_NONE;
         input_focused = true;
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                     user_disp, bot_disp);
+                     user_disp, bot_disp, false);
       }
       ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                              input_focused, input_scroll_line);
+                              input_focused, input_scroll_line, false);
 
       LLMContext llm_ctx = {.character = character_loaded ? &character : NULL,
                             .persona = &persona};
@@ -942,11 +1208,11 @@ int main(void) {
                                        current_input_height);
           input_scroll_line = 0;
           ui_draw_chat(chat_win, &history, selected_msg,
-                       get_model_name(&models), user_disp, bot_disp);
+                       get_model_name(&models), user_disp, bot_disp, false);
         }
 
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
 
         int input_y = getbegy(input_win);
         int input_x = getbegx(input_win);
@@ -956,13 +1222,13 @@ int main(void) {
           if (needs_chat_redraw) {
             touchwin(chat_win);
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
           }
           suggestion_box_draw(&suggestions);
         } else {
           touchwin(chat_win);
           ui_draw_chat(chat_win, &history, selected_msg,
-                       get_model_name(&models), user_disp, bot_disp);
+                       get_model_name(&models), user_disp, bot_disp, false);
         }
       }
       continue;
@@ -983,11 +1249,11 @@ int main(void) {
                                        current_input_height);
           input_scroll_line = 0;
           ui_draw_chat(chat_win, &history, selected_msg,
-                       get_model_name(&models), user_disp, bot_disp);
+                       get_model_name(&models), user_disp, bot_disp, false);
         }
 
         ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                                input_focused, input_scroll_line);
+                                input_focused, input_scroll_line, false);
 
         int input_y = getbegy(input_win);
         int input_x = getbegx(input_win);
@@ -997,13 +1263,13 @@ int main(void) {
           if (needs_chat_redraw) {
             touchwin(chat_win);
             ui_draw_chat(chat_win, &history, selected_msg,
-                         get_model_name(&models), user_disp, bot_disp);
+                         get_model_name(&models), user_disp, bot_disp, false);
           }
           suggestion_box_draw(&suggestions);
         } else {
           touchwin(chat_win);
           ui_draw_chat(chat_win, &history, selected_msg,
-                       get_model_name(&models), user_disp, bot_disp);
+                       get_model_name(&models), user_disp, bot_disp, false);
         }
       }
       continue;
@@ -1031,11 +1297,11 @@ int main(void) {
         if (cur.line >= input_scroll_line + visible_lines)
           input_scroll_line = cur.line - visible_lines + 1;
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                     user_disp, bot_disp);
+                     user_disp, bot_disp, false);
       }
 
       ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
-                              input_focused, input_scroll_line);
+                              input_focused, input_scroll_line, false);
 
       int input_y = getbegy(input_win);
       int input_x = getbegx(input_win);
@@ -1045,13 +1311,13 @@ int main(void) {
         if (needs_chat_redraw) {
           touchwin(chat_win);
           ui_draw_chat(chat_win, &history, selected_msg,
-                       get_model_name(&models), user_disp, bot_disp);
+                       get_model_name(&models), user_disp, bot_disp, false);
         }
         suggestion_box_draw(&suggestions);
       } else {
         touchwin(chat_win);
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                     user_disp, bot_disp);
+                     user_disp, bot_disp, false);
       }
     }
   }
@@ -1065,6 +1331,7 @@ int main(void) {
   if (character_loaded) {
     character_free(&character);
   }
+  free(in_place_edit.buffer);
   llm_cleanup();
   return EXIT_SUCCESS;
 }
