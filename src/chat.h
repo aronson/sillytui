@@ -35,5 +35,6 @@ bool chat_load(ChatHistory *history, const char *id, char *out_character_path,
 bool chat_delete(const char *id);
 char *chat_generate_id(void);
 const char *chat_auto_title(const ChatHistory *history);
+bool chat_find_by_title(const char *title, char *out_id, size_t id_size);
 
 #endif

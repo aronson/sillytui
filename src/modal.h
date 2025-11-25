@@ -15,6 +15,7 @@ typedef enum {
   MODAL_MESSAGE,
   MODAL_CHAT_LIST,
   MODAL_CHAT_SAVE,
+  MODAL_CHAT_OVERWRITE_CONFIRM,
   MODAL_EXIT_CONFIRM,
   MODAL_PERSONA_EDIT,
   MODAL_CHARACTER_INFO,
@@ -43,6 +44,9 @@ typedef struct {
   ChatList chat_list;
   char current_chat_id[CHAT_ID_MAX];
   char character_path[CHAT_CHAR_PATH_MAX];
+
+  char pending_save_title[CHAT_TITLE_MAX];
+  char existing_chat_id[CHAT_ID_MAX];
 
   bool exit_dont_ask;
 

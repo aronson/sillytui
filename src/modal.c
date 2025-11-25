@@ -516,6 +516,23 @@ static void draw_chat_save(Modal *m) {
   wrefresh(w);
 }
 
+static void draw_chat_overwrite_confirm(Modal *m) {
+  WINDOW *w = m->win;
+  werase(w);
+  draw_box_fancy(w, m->height, m->width);
+  draw_title(w, m->width, "Overwrite Chat?");
+
+  mvwprintw(w, 2, 3, "A chat with this name already exists.");
+  mvwprintw(w, 3, 3, "Overwrite \"%.*s\"?", m->width - 16,
+            m->pending_save_title);
+
+  int btn_y = m->height - 2;
+  draw_button(w, btn_y, m->width / 2 - 12, "Overwrite", m->field_index == 0);
+  draw_button(w, btn_y, m->width / 2 + 2, "Cancel", m->field_index == 1);
+
+  wrefresh(w);
+}
+
 static void draw_exit_confirm(Modal *m) {
   WINDOW *w = m->win;
   werase(w);
@@ -726,6 +743,9 @@ void modal_draw(Modal *m, const ModelsFile *mf) {
     break;
   case MODAL_CHAT_SAVE:
     draw_chat_save(m);
+    break;
+  case MODAL_CHAT_OVERWRITE_CONFIRM:
+    draw_chat_overwrite_confirm(m);
     break;
   case MODAL_EXIT_CONFIRM:
     draw_exit_confirm(m);
@@ -996,6 +1016,27 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       if (m->field_index == 1 || m->field_index == 0) {
         const char *title =
             m->fields[0][0] ? m->fields[0] : chat_auto_title(history);
+
+        char existing_id[CHAT_ID_MAX] = {0};
+        bool title_exists =
+            chat_find_by_title(title, existing_id, sizeof(existing_id));
+
+        bool is_same_chat = m->current_chat_id[0] &&
+                            strcmp(m->current_chat_id, existing_id) == 0;
+
+        if (title_exists && !is_same_chat) {
+          strncpy(m->pending_save_title, title, CHAT_TITLE_MAX - 1);
+          m->pending_save_title[CHAT_TITLE_MAX - 1] = '\0';
+          strncpy(m->existing_chat_id, existing_id, CHAT_ID_MAX - 1);
+          m->existing_chat_id[CHAT_ID_MAX - 1] = '\0';
+
+          modal_close(m);
+          m->type = MODAL_CHAT_OVERWRITE_CONFIRM;
+          m->field_index = 0;
+          create_window(m, 8, 50);
+          return MODAL_RESULT_NONE;
+        }
+
         const char *id =
             m->current_chat_id[0] ? m->current_chat_id : chat_generate_id();
 
@@ -1017,6 +1058,38 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
 
     if (m->field_index == 0) {
       handle_field_key(m, ch);
+    }
+    return MODAL_RESULT_NONE;
+  }
+
+  if (m->type == MODAL_CHAT_OVERWRITE_CONFIRM) {
+    if (ch == 27) {
+      modal_close(m);
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == '\t' || ch == KEY_LEFT || ch == KEY_RIGHT) {
+      m->field_index = 1 - m->field_index;
+      return MODAL_RESULT_NONE;
+    }
+    if (ch == '\n' || ch == '\r') {
+      if (m->field_index == 0) {
+        chat_delete(m->existing_chat_id);
+
+        const char *id = m->existing_chat_id;
+        if (chat_save(history, id, m->pending_save_title, m->character_path)) {
+          if (loaded_chat_id) {
+            strncpy(loaded_chat_id, id, CHAT_ID_MAX - 1);
+            loaded_chat_id[CHAT_ID_MAX - 1] = '\0';
+          }
+          modal_close(m);
+          return MODAL_RESULT_CHAT_SAVED;
+        } else {
+          modal_open_message(m, "Failed to save chat", true);
+        }
+      } else {
+        modal_close(m);
+      }
+      return MODAL_RESULT_NONE;
     }
     return MODAL_RESULT_NONE;
   }

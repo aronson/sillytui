@@ -605,3 +605,54 @@ const char *chat_auto_title(const ChatHistory *history) {
   strftime(title, sizeof(title), "Chat %Y-%m-%d %H:%M", t);
   return title;
 }
+
+bool chat_find_by_title(const char *title, char *out_id, size_t id_size) {
+  if (!title || !out_id || id_size == 0)
+    return false;
+
+  const char *dir = get_chats_dir();
+  if (!dir)
+    return false;
+
+  DIR *d = opendir(dir);
+  if (!d)
+    return false;
+
+  bool found = false;
+  struct dirent *entry;
+  while ((entry = readdir(d)) != NULL) {
+    if (entry->d_name[0] == '.')
+      continue;
+
+    size_t namelen = strlen(entry->d_name);
+    if (namelen < 6 || strcmp(entry->d_name + namelen - 5, ".json") != 0)
+      continue;
+
+    char filepath[768];
+    snprintf(filepath, sizeof(filepath), "%s/%s", dir, entry->d_name);
+
+    char *content = read_file_contents(filepath, NULL);
+    if (!content)
+      continue;
+
+    char *chat_title = find_json_string(content, "title");
+    if (chat_title && strcmp(chat_title, title) == 0) {
+      char *chat_id = find_json_string(content, "id");
+      if (chat_id) {
+        strncpy(out_id, chat_id, id_size - 1);
+        out_id[id_size - 1] = '\0';
+        free(chat_id);
+        found = true;
+      }
+      free(chat_title);
+      free(content);
+      break;
+    }
+    if (chat_title)
+      free(chat_title);
+    free(content);
+  }
+
+  closedir(d);
+  return found;
+}
