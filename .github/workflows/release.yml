@@ -55,66 +55,8 @@ jobs:
           name: sillytui-linux-x86_64
           path: build/sillytui-linux-x86_64
 
-  build-windows:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ncurses
-            mingw-w64-x86_64-curl
-            make
-
-      - name: Build
-        run: |
-          mkdir build && cd build
-          cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release \
-            -DCURSES_NEED_NCURSES=TRUE \
-            -DCURSES_INCLUDE_DIR=/mingw64/include/ncursesw
-          make -j"$(nproc)"
-
-      - name: Package
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Copy-Item build/sillytui.exe dist/
-          Copy-Item C:/msys64/mingw64/bin/libncursesw6.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libcurl-4.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libgcc_s_seh-1.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libwinpthread-1.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libstdc++-6.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/zlib1.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libbrotlidec.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libbrotlicommon.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libidn2-0.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libnghttp2-14.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libpsl-5.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libssh2-1.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libssl-3-x64.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libcrypto-3-x64.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libzstd.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libunistring-5.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libiconv-2.dll dist/
-          Copy-Item C:/msys64/mingw64/bin/libintl-8.dll dist/
-          Compress-Archive -Path dist/* -DestinationPath sillytui-windows-x86_64.zip
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sillytui-windows-x86_64
-          path: sillytui-windows-x86_64.zip
-
   release:
-    needs: [build-macos, build-linux, build-windows]
+    needs: [build-macos, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -131,7 +73,6 @@ jobs:
           files: |
             artifacts/sillytui-macos-arm64/sillytui-macos-arm64
             artifacts/sillytui-linux-x86_64/sillytui-linux-x86_64
-            artifacts/sillytui-windows-x86_64/sillytui-windows-x86_64.zip
           draft: false
           prerelease: false
           generate_release_notes: true
