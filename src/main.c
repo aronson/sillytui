@@ -846,9 +846,14 @@ int main(void) {
 
         int input_y = getbegy(input_win);
         int input_x = getbegx(input_win);
-        suggestion_box_update(&suggestions, input_buffer, input_win, input_y,
-                              input_x);
+        bool needs_chat_redraw = suggestion_box_update(
+            &suggestions, input_buffer, input_win, input_y, input_x);
         if (suggestion_box_is_open(&suggestions)) {
+          if (needs_chat_redraw) {
+            touchwin(chat_win);
+            ui_draw_chat(chat_win, &history, selected_msg,
+                         get_model_name(&models), user_disp, bot_disp);
+          }
           suggestion_box_draw(&suggestions);
         } else {
           touchwin(chat_win);
@@ -882,9 +887,14 @@ int main(void) {
 
         int input_y = getbegy(input_win);
         int input_x = getbegx(input_win);
-        suggestion_box_update(&suggestions, input_buffer, input_win, input_y,
-                              input_x);
+        bool needs_chat_redraw = suggestion_box_update(
+            &suggestions, input_buffer, input_win, input_y, input_x);
         if (suggestion_box_is_open(&suggestions)) {
+          if (needs_chat_redraw) {
+            touchwin(chat_win);
+            ui_draw_chat(chat_win, &history, selected_msg,
+                         get_model_name(&models), user_disp, bot_disp);
+          }
           suggestion_box_draw(&suggestions);
         } else {
           touchwin(chat_win);
@@ -925,9 +935,14 @@ int main(void) {
 
       int input_y = getbegy(input_win);
       int input_x = getbegx(input_win);
-      suggestion_box_update(&suggestions, input_buffer, input_win, input_y,
-                            input_x);
+      bool needs_chat_redraw = suggestion_box_update(
+          &suggestions, input_buffer, input_win, input_y, input_x);
       if (suggestion_box_is_open(&suggestions)) {
+        if (needs_chat_redraw) {
+          touchwin(chat_win);
+          ui_draw_chat(chat_win, &history, selected_msg,
+                       get_model_name(&models), user_disp, bot_disp);
+        }
         suggestion_box_draw(&suggestions);
       } else {
         touchwin(chat_win);

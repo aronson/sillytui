@@ -70,7 +70,7 @@ int ui_get_input_line_count(const char *buffer, int text_width);
 void suggestion_box_init(SuggestionBox *sb, const SlashCommand *commands,
                          int count);
 void suggestion_box_free(SuggestionBox *sb);
-void suggestion_box_update(SuggestionBox *sb, const char *filter,
+bool suggestion_box_update(SuggestionBox *sb, const char *filter,
                            WINDOW *parent, int parent_y, int parent_x);
 void suggestion_box_draw(SuggestionBox *sb);
 void suggestion_box_navigate(SuggestionBox *sb, int direction);

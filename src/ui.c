@@ -868,11 +868,12 @@ static void load_chat_suggestions(SuggestionBox *sb, const char *filter_text) {
   chat_list_free(&list);
 }
 
-void suggestion_box_update(SuggestionBox *sb, const char *filter,
+bool suggestion_box_update(SuggestionBox *sb, const char *filter,
                            WINDOW *parent, int parent_y, int parent_x) {
   if (!filter || filter[0] != '/') {
+    bool was_open = sb->win != NULL;
     suggestion_box_close(sb);
-    return;
+    return was_open;
   }
 
   const char *query = filter + 1;
@@ -887,8 +888,9 @@ void suggestion_box_update(SuggestionBox *sb, const char *filter,
     load_chat_suggestions(sb, chat_filter);
 
     if (sb->dynamic_count == 0) {
+      bool was_open = sb->win != NULL;
       suggestion_box_close(sb);
-      return;
+      return was_open;
     }
 
     sb->matched_count = sb->dynamic_count;
@@ -909,8 +911,9 @@ void suggestion_box_update(SuggestionBox *sb, const char *filter,
 
     if (exact_match_exists && has_trailing_space &&
         strcmp(query, "chat load ") != 0) {
+      bool was_open = sb->win != NULL;
       suggestion_box_close(sb);
-      return;
+      return was_open;
     }
 
     sb->matched_count = 0;
@@ -920,8 +923,9 @@ void suggestion_box_update(SuggestionBox *sb, const char *filter,
     }
 
     if (sb->matched_count == 0) {
+      bool was_open = sb->win != NULL;
       suggestion_box_close(sb);
-      return;
+      return was_open;
     }
 
     if (sb->active_index >= sb->matched_count)
@@ -948,22 +952,29 @@ void suggestion_box_update(SuggestionBox *sb, const char *filter,
   if (box_x + box_width > max_x)
     box_x = max_x - box_width;
 
+  bool needs_redraw = false;
   if (sb->win) {
     int old_h, old_w, old_y, old_x;
     getmaxyx(sb->win, old_h, old_w);
     getbegyx(sb->win, old_y, old_x);
     if (old_h != box_height || old_w != box_width || old_y != box_y ||
         old_x != box_x) {
-      wclear(sb->win);
+      if (old_h > box_height || old_w > box_width || old_y < box_y) {
+        needs_redraw = true;
+      }
+      werase(sb->win);
       wrefresh(sb->win);
       delwin(sb->win);
-      sb->win = newwin(box_height, box_width, box_y, box_x);
+      sb->win = NULL;
     }
-  } else {
+  }
+
+  if (!sb->win) {
     sb->win = newwin(box_height, box_width, box_y, box_x);
   }
 
   sb->filter = filter;
+  return needs_redraw;
 }
 
 void suggestion_box_draw(SuggestionBox *sb) {
