@@ -1,7 +1,7 @@
 #ifndef MARKDOWN_H
 #define MARKDOWN_H
 
-#include <ncurses.h>
+#include <curses.h>
 #include <stdbool.h>
 
 void markdown_init_colors(void);

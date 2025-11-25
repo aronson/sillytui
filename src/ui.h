@@ -2,7 +2,7 @@
 #define UI_H
 
 #include "history.h"
-#include <ncurses.h>
+#include <curses.h>
 
 #define COLOR_PAIR_BORDER 10
 #define COLOR_PAIR_TITLE 11

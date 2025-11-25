@@ -5,7 +5,7 @@
 #include "chat.h"
 #include "config.h"
 #include "persona.h"
-#include <ncurses.h>
+#include <curses.h>
 #include <stdbool.h>
 
 typedef enum {
