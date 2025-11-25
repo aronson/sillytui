@@ -31,7 +31,7 @@ void modal_open_model_set(Modal *m) {
   modal_close(m);
   m->type = MODAL_MODEL_SET;
   m->field_index = 0;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 6; i++) {
     m->fields[i][0] = '\0';
     m->field_cursor[i] = 0;
     m->field_len[i] = 0;
@@ -39,7 +39,8 @@ void modal_open_model_set(Modal *m) {
   snprintf(m->fields[4], sizeof(m->fields[4]), "%d", DEFAULT_CONTEXT_LENGTH);
   m->field_len[4] = (int)strlen(m->fields[4]);
   m->field_cursor[4] = m->field_len[4];
-  create_window(m, 19, 60);
+  m->api_type_selection = API_TYPE_OPENAI;
+  create_window(m, 21, 60);
 }
 
 void modal_open_model_list(Modal *m, const ModelsFile *mf) {
@@ -88,7 +89,9 @@ void modal_open_model_edit(Modal *m, const ModelsFile *mf, int model_index) {
   m->field_len[4] = (int)strlen(m->fields[4]);
   m->field_cursor[4] = m->field_len[4];
 
-  create_window(m, 19, 60);
+  m->api_type_selection = mc->api_type;
+
+  create_window(m, 21, 60);
 }
 
 void modal_open_message(Modal *m, const char *msg, bool is_error) {
@@ -372,9 +375,23 @@ static void draw_model_set(Modal *m) {
                m->field_cursor[i], m->field_index == i, is_pw[i]);
   }
 
+  int api_y = 2 + 5 * 3;
+  bool api_selected = (m->field_index == 5);
+  if (api_selected)
+    wattron(w, A_BOLD);
+  mvwprintw(w, api_y, 3, "API Type:");
+  if (api_selected)
+    wattroff(w, A_BOLD);
+
+  if (api_selected)
+    wattron(w, A_REVERSE);
+  mvwprintw(w, api_y, 14, " < %s > ", api_type_name(m->api_type_selection));
+  if (api_selected)
+    wattroff(w, A_REVERSE);
+
   int btn_y = m->height - 2;
-  draw_button(w, btn_y, m->width / 2 - 12, "Save", m->field_index == 5);
-  draw_button(w, btn_y, m->width / 2 + 2, "Cancel", m->field_index == 6);
+  draw_button(w, btn_y, m->width / 2 - 12, "Save", m->field_index == 6);
+  draw_button(w, btn_y, m->width / 2 + 2, "Cancel", m->field_index == 7);
 
   wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
   mvwprintw(w, btn_y, 3, "Tab: next");
@@ -399,9 +416,23 @@ static void draw_model_edit(Modal *m) {
                m->field_cursor[i], m->field_index == i, is_pw[i]);
   }
 
+  int api_y = 2 + 5 * 3;
+  bool api_selected = (m->field_index == 5);
+  if (api_selected)
+    wattron(w, A_BOLD);
+  mvwprintw(w, api_y, 3, "API Type:");
+  if (api_selected)
+    wattroff(w, A_BOLD);
+
+  if (api_selected)
+    wattron(w, A_REVERSE);
+  mvwprintw(w, api_y, 14, " < %s > ", api_type_name(m->api_type_selection));
+  if (api_selected)
+    wattroff(w, A_REVERSE);
+
   int btn_y = m->height - 2;
-  draw_button(w, btn_y, m->width / 2 - 12, "Save", m->field_index == 5);
-  draw_button(w, btn_y, m->width / 2 + 2, "Cancel", m->field_index == 6);
+  draw_button(w, btn_y, m->width / 2 - 12, "Save", m->field_index == 6);
+  draw_button(w, btn_y, m->width / 2 + 2, "Cancel", m->field_index == 7);
 
   wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
   mvwprintw(w, btn_y, 3, "Tab: next");
@@ -1078,19 +1109,30 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       return MODAL_RESULT_NONE;
     }
     if (ch == '\t' || ch == KEY_DOWN) {
-      m->field_index = (m->field_index + 1) % 7;
+      m->field_index = (m->field_index + 1) % 8;
       return MODAL_RESULT_NONE;
     }
     if (ch == KEY_BTAB || ch == KEY_UP) {
-      m->field_index = (m->field_index + 6) % 7;
+      m->field_index = (m->field_index + 7) % 8;
       return MODAL_RESULT_NONE;
     }
+    if (m->field_index == 5) {
+      if (ch == KEY_LEFT || ch == 'h') {
+        m->api_type_selection =
+            (m->api_type_selection + API_TYPE_COUNT - 1) % API_TYPE_COUNT;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_RIGHT || ch == 'l') {
+        m->api_type_selection = (m->api_type_selection + 1) % API_TYPE_COUNT;
+        return MODAL_RESULT_NONE;
+      }
+    }
     if (ch == '\n' || ch == '\r') {
-      if (m->field_index == 6) {
+      if (m->field_index == 7) {
         modal_close(m);
         return MODAL_RESULT_NONE;
       }
-      if (m->field_index == 5) {
+      if (m->field_index == 6) {
         if (m->fields[0][0] == '\0') {
           modal_open_message(m, "Name is required", true);
           return MODAL_RESULT_NONE;
@@ -1112,6 +1154,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         mc.context_length = atoi(m->fields[4]);
         if (mc.context_length <= 0)
           mc.context_length = DEFAULT_CONTEXT_LENGTH;
+        mc.api_type = m->api_type_selection;
 
         if (config_add_model(mf, &mc)) {
           if (mf->active_index < 0) {
@@ -1124,7 +1167,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         }
         return MODAL_RESULT_NONE;
       }
-      m->field_index = (m->field_index + 1) % 7;
+      m->field_index = (m->field_index + 1) % 8;
       return MODAL_RESULT_NONE;
     }
 
@@ -1194,19 +1237,30 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       return MODAL_RESULT_NONE;
     }
     if (ch == '\t' || ch == KEY_DOWN) {
-      m->field_index = (m->field_index + 1) % 7;
+      m->field_index = (m->field_index + 1) % 8;
       return MODAL_RESULT_NONE;
     }
     if (ch == KEY_BTAB || ch == KEY_UP) {
-      m->field_index = (m->field_index + 6) % 7;
+      m->field_index = (m->field_index + 7) % 8;
       return MODAL_RESULT_NONE;
     }
+    if (m->field_index == 5) {
+      if (ch == KEY_LEFT || ch == 'h') {
+        m->api_type_selection =
+            (m->api_type_selection + API_TYPE_COUNT - 1) % API_TYPE_COUNT;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_RIGHT || ch == 'l') {
+        m->api_type_selection = (m->api_type_selection + 1) % API_TYPE_COUNT;
+        return MODAL_RESULT_NONE;
+      }
+    }
     if (ch == '\n' || ch == '\r') {
-      if (m->field_index == 6) {
+      if (m->field_index == 7) {
         modal_open_model_list(m, mf);
         return MODAL_RESULT_NONE;
       }
-      if (m->field_index == 5) {
+      if (m->field_index == 6) {
         if (m->fields[0][0] == '\0') {
           modal_open_message(m, "Name is required", true);
           return MODAL_RESULT_NONE;
@@ -1228,12 +1282,13 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         mc->context_length = atoi(m->fields[4]);
         if (mc->context_length <= 0)
           mc->context_length = DEFAULT_CONTEXT_LENGTH;
+        mc->api_type = m->api_type_selection;
 
         config_save_models(mf);
         modal_open_message(m, "Model updated!", false);
         return MODAL_RESULT_NONE;
       }
-      m->field_index = (m->field_index + 1) % 7;
+      m->field_index = (m->field_index + 1) % 8;
       return MODAL_RESULT_NONE;
     }
 

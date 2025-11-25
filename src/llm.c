@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static char *escape_json_string(const char *str);
+
 typedef struct {
   LLMResponse *resp;
   LLMStreamCallback cb;
@@ -24,6 +26,176 @@ int llm_estimate_tokens(const char *text) {
     return 0;
   size_t len = strlen(text);
   return (int)(len / 3.35) + 1;
+}
+
+static size_t tokenize_write_callback(char *ptr, size_t size, size_t nmemb,
+                                      void *userdata) {
+  size_t bytes = size * nmemb;
+  char **response = (char **)userdata;
+  size_t old_len = *response ? strlen(*response) : 0;
+  char *tmp = realloc(*response, old_len + bytes + 1);
+  if (!tmp)
+    return 0;
+  *response = tmp;
+  memcpy(*response + old_len, ptr, bytes);
+  (*response)[old_len + bytes] = '\0';
+  return bytes;
+}
+
+static int parse_token_count(const char *json) {
+  const char *patterns[] = {
+      "\"length\":", "\"count\":", "\"value\":", "\"tokens\":"};
+  for (int i = 0; i < 4; i++) {
+    const char *p = strstr(json, patterns[i]);
+    if (p) {
+      p += strlen(patterns[i]);
+      while (*p == ' ' || *p == '\t')
+        p++;
+      if (i == 3) {
+        if (*p == '[') {
+          int count = 0;
+          p++;
+          while (*p && *p != ']') {
+            if (*p == ',')
+              count++;
+            else if (*p != ' ' && *p != '\t' && *p != '\n' && count == 0)
+              count = 1;
+            p++;
+          }
+          return count;
+        }
+      } else {
+        return atoi(p);
+      }
+    }
+  }
+  return -1;
+}
+
+int llm_tokenize(const ModelConfig *config, const char *text) {
+  if (!config || !text)
+    return llm_estimate_tokens(text);
+
+  if (config->api_type == API_TYPE_OPENAI) {
+    return llm_estimate_tokens(text);
+  }
+
+  CURL *curl = curl_easy_init();
+  if (!curl)
+    return llm_estimate_tokens(text);
+
+  char url[512];
+  char *body = NULL;
+  const char *base = config->base_url;
+  size_t base_len = strlen(base);
+  while (base_len > 0 && base[base_len - 1] == '/')
+    base_len--;
+
+  char base_trimmed[256];
+  snprintf(base_trimmed, sizeof(base_trimmed), "%.*s", (int)base_len, base);
+
+  char *base_no_v1 = base_trimmed;
+  size_t len = strlen(base_no_v1);
+  if (len >= 3 && strcmp(base_no_v1 + len - 3, "/v1") == 0) {
+    base_no_v1[len - 3] = '\0';
+  }
+
+  switch (config->api_type) {
+  case API_TYPE_APHRODITE:
+    snprintf(url, sizeof(url), "%s/v1/tokenize", base_no_v1);
+    break;
+  case API_TYPE_VLLM:
+    snprintf(url, sizeof(url), "%s/tokenize", base_no_v1);
+    break;
+  case API_TYPE_LLAMACPP:
+    snprintf(url, sizeof(url), "%s/tokenize", base_no_v1);
+    break;
+  case API_TYPE_KOBOLDCPP:
+    snprintf(url, sizeof(url), "%s/api/extra/tokencount", base_no_v1);
+    break;
+  case API_TYPE_TABBY:
+    snprintf(url, sizeof(url), "%s/v1/token/encode", base_no_v1);
+    break;
+  default:
+    curl_easy_cleanup(curl);
+    return llm_estimate_tokens(text);
+  }
+
+  char *escaped_text = escape_json_string(text);
+  if (!escaped_text) {
+    curl_easy_cleanup(curl);
+    return llm_estimate_tokens(text);
+  }
+
+  size_t body_size = strlen(escaped_text) + 256;
+  body = malloc(body_size);
+  if (!body) {
+    free(escaped_text);
+    curl_easy_cleanup(curl);
+    return llm_estimate_tokens(text);
+  }
+
+  switch (config->api_type) {
+  case API_TYPE_APHRODITE:
+  case API_TYPE_VLLM:
+    snprintf(body, body_size, "{\"model\":\"%s\",\"prompt\":\"%s\"}",
+             config->model_id, escaped_text);
+    break;
+  case API_TYPE_LLAMACPP:
+    snprintf(body, body_size, "{\"content\":\"%s\"}", escaped_text);
+    break;
+  case API_TYPE_KOBOLDCPP:
+    snprintf(body, body_size, "{\"prompt\":\"%s\"}", escaped_text);
+    break;
+  case API_TYPE_TABBY:
+    snprintf(body, body_size, "{\"text\":\"%s\"}", escaped_text);
+    break;
+  default:
+    break;
+  }
+
+  free(escaped_text);
+
+  struct curl_slist *headers = NULL;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  if (config->api_key[0]) {
+    char auth[300];
+    snprintf(auth, sizeof(auth), "Authorization: Bearer %s", config->api_key);
+    headers = curl_slist_append(headers, auth);
+  }
+
+  char *response = NULL;
+  curl_easy_setopt(curl, CURLOPT_URL, url);
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tokenize_write_callback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+
+  if (strstr(url, "localhost") || strstr(url, "127.0.0.1") ||
+      strstr(url, "0.0.0.0")) {
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+  }
+  curl_easy_setopt(curl, CURLOPT_NOPROXY, "localhost,127.0.0.1,0.0.0.0");
+
+  CURLcode res = curl_easy_perform(curl);
+
+  int token_count = -1;
+  if (res == CURLE_OK && response) {
+    token_count = parse_token_count(response);
+  }
+
+  free(response);
+  free(body);
+  curl_slist_free_all(headers);
+  curl_easy_cleanup(curl);
+
+  if (token_count < 0)
+    return llm_estimate_tokens(text);
+
+  return token_count;
 }
 
 static void append_to_response(LLMResponse *resp, const char *data,
@@ -418,9 +590,17 @@ static char *build_system_prompt(const LLMContext *context) {
   return sb.data;
 }
 
-static char *build_request_body(const char *model_id,
+static int count_tokens(const ModelConfig *config, const char *text) {
+  if (!config || config->api_type == API_TYPE_OPENAI)
+    return llm_estimate_tokens(text);
+  return llm_tokenize(config, text);
+}
+
+static char *build_request_body(const ModelConfig *config,
                                 const ChatHistory *history,
-                                const LLMContext *context, int context_length) {
+                                const LLMContext *context) {
+  int context_length = config->context_length > 0 ? config->context_length
+                                                  : DEFAULT_CONTEXT_LENGTH;
   size_t cap = 16384;
   char *body = malloc(cap);
   if (!body)
@@ -434,7 +614,7 @@ static char *build_request_body(const char *model_id,
 
   size_t pos = 0;
   pos += snprintf(body + pos, cap - pos, "{\"model\":\"%s\",\"messages\":[",
-                  model_id);
+                  config->model_id);
 
   bool first = true;
 
@@ -488,22 +668,18 @@ static char *build_request_body(const char *model_id,
     }
   }
 
-  int tokens_used = llm_estimate_tokens(body);
+  int tokens_used = count_tokens(config, body);
 
-  int response_reserve = context_length / 4;
-  if (response_reserve < 1024)
-    response_reserve = 1024;
-  if (response_reserve > 4096)
-    response_reserve = 4096;
-
-  int available_tokens = context_length - tokens_used - response_reserve;
+  int max_tokens = 512;
+  int available_tokens = context_length - tokens_used - max_tokens;
 
   int post_history_tokens = 0;
   if (context && context->character &&
       context->character->post_history_instructions &&
       context->character->post_history_instructions[0]) {
     post_history_tokens =
-        llm_estimate_tokens(context->character->post_history_instructions) + 20;
+        count_tokens(config, context->character->post_history_instructions) +
+        20;
     available_tokens -= post_history_tokens;
   }
 
@@ -515,7 +691,7 @@ static char *build_request_body(const char *model_id,
       if (!msg)
         continue;
 
-      int msg_tokens = llm_estimate_tokens(msg) + 20;
+      int msg_tokens = count_tokens(config, msg) + 20;
       if (cumulative_tokens + msg_tokens > available_tokens) {
         start_index = i;
         break;
@@ -597,7 +773,8 @@ static char *build_request_body(const char *model_id,
     }
   }
 
-  pos += snprintf(body + pos, cap - pos, "],\"stream\":true}");
+  pos +=
+      snprintf(body + pos, cap - pos, "],\"stream\":true,\"max_tokens\":512}");
   return body;
 }
 
@@ -620,9 +797,7 @@ LLMResponse llm_chat(const ModelConfig *config, const ChatHistory *history,
   char url[512];
   snprintf(url, sizeof(url), "%s/chat/completions", config->base_url);
 
-  int ctx_len = config->context_length > 0 ? config->context_length
-                                           : DEFAULT_CONTEXT_LENGTH;
-  char *body = build_request_body(config->model_id, history, context, ctx_len);
+  char *body = build_request_body(config, history, context);
   if (!body) {
     snprintf(resp.error, sizeof(resp.error), "Failed to build request");
     curl_easy_cleanup(curl);

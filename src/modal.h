@@ -34,9 +34,10 @@ typedef struct {
   int start_x;
 
   int field_index;
-  char fields[5][256];
-  int field_cursor[5];
-  int field_len[5];
+  char fields[6][256];
+  int field_cursor[6];
+  int field_len[6];
+  ApiType api_type_selection;
 
   int list_selection;
   int list_scroll;

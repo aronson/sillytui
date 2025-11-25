@@ -7,6 +7,25 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+static const char *API_TYPE_NAMES[] = {"openai",   "aphrodite", "vllm",
+                                       "llamacpp", "koboldcpp", "tabby"};
+
+const char *api_type_name(ApiType type) {
+  if (type >= 0 && type < API_TYPE_COUNT)
+    return API_TYPE_NAMES[type];
+  return "openai";
+}
+
+ApiType api_type_from_name(const char *name) {
+  if (!name || !name[0])
+    return API_TYPE_OPENAI;
+  for (int i = 0; i < API_TYPE_COUNT; i++) {
+    if (strcasecmp(name, API_TYPE_NAMES[i]) == 0)
+      return (ApiType)i;
+  }
+  return API_TYPE_OPENAI;
+}
+
 static bool get_config_path(char *buf, size_t bufsize) {
   const char *home = getenv("HOME");
   if (!home) {
@@ -209,6 +228,10 @@ bool config_load_models(ModelsFile *mf) {
               m->context_length = DEFAULT_CONTEXT_LENGTH;
             while (*p && *p != ',' && *p != '}')
               p++;
+          } else if (strcmp(mkey, "api_type") == 0) {
+            char type_str[32];
+            p = parse_string(p, type_str, sizeof(type_str));
+            m->api_type = api_type_from_name(type_str);
           }
           if (!p)
             break;
@@ -254,8 +277,9 @@ bool config_save_models(const ModelsFile *mf) {
     fprintf(f, "      \"model_id\": ");
     write_escaped(f, m->model_id);
     fprintf(f, ",\n");
-    fprintf(f, "      \"context_length\": %d\n",
+    fprintf(f, "      \"context_length\": %d,\n",
             m->context_length > 0 ? m->context_length : DEFAULT_CONTEXT_LENGTH);
+    fprintf(f, "      \"api_type\": \"%s\"\n", api_type_name(m->api_type));
     fprintf(f, "    }%s\n", (i < mf->count - 1) ? "," : "");
   }
 

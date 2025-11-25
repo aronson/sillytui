@@ -10,12 +10,26 @@
 #define MAX_KEY_LEN 256
 #define MAX_MODEL_ID_LEN 128
 
+typedef enum {
+  API_TYPE_OPENAI = 0,
+  API_TYPE_APHRODITE,
+  API_TYPE_VLLM,
+  API_TYPE_LLAMACPP,
+  API_TYPE_KOBOLDCPP,
+  API_TYPE_TABBY,
+  API_TYPE_COUNT
+} ApiType;
+
+const char *api_type_name(ApiType type);
+ApiType api_type_from_name(const char *name);
+
 typedef struct {
   char name[MAX_NAME_LEN];
   char base_url[MAX_URL_LEN];
   char api_key[MAX_KEY_LEN];
   char model_id[MAX_MODEL_ID_LEN];
-  int context_length; // Max context in tokens (default: 8192)
+  int context_length;
+  ApiType api_type;
 } ModelConfig;
 
 #define DEFAULT_CONTEXT_LENGTH 8192
