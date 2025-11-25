@@ -572,9 +572,10 @@ static char *build_system_prompt(const LLMContext *context) {
       free(substituted);
     }
   } else {
-    char default_prompt[256];
+    char default_prompt[512];
     snprintf(default_prompt, sizeof(default_prompt),
-             "Write %s's next reply in a fictional chat between %s and %s.",
+             "Write %.127s's next reply in a fictional chat between %.127s and "
+             "%.127s.",
              char_name, char_name, user_name);
     sb_append(&sb, default_prompt);
   }

@@ -266,7 +266,7 @@ static bool handle_slash_command(const char *input, Modal *modal,
           chat_id[CHAT_ID_MAX - 1] = '\0';
         }
       } else {
-        snprintf(char_name, sizeof(char_name), "%s", args);
+        snprintf(char_name, sizeof(char_name), "%.127s", args);
       }
 
       char loaded_char_path[CHAT_CHAR_PATH_MAX] = {0};
@@ -356,7 +356,7 @@ static bool handle_slash_command(const char *input, Modal *modal,
           snprintf(current_char_path, CHAT_CHAR_PATH_MAX, "%s", config_path);
           free(config_path);
         } else {
-          snprintf(current_char_path, CHAT_CHAR_PATH_MAX, "%s", path);
+          snprintf(current_char_path, CHAT_CHAR_PATH_MAX, "%.511s", path);
         }
         history_free(history);
         history_init(history);
@@ -382,7 +382,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
         char err_msg[1024];
         snprintf(
             err_msg, sizeof(err_msg),
-            "Failed to load character card:\n%.512s\n\nMake sure the file exists "
+            "Failed to load character card:\n%.512s\n\nMake sure the file "
+            "exists "
             "and is a valid character card (.json or .png with embedded data).",
             path);
         modal_open_message(modal, err_msg, true);

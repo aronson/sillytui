@@ -192,10 +192,11 @@ void modal_open_persona_edit(Modal *m, const Persona *persona) {
     m->field_len[i] = 0;
   }
   if (persona) {
-    strncpy(m->fields[0], persona->name, sizeof(m->fields[0]) - 1);
+    snprintf(m->fields[0], sizeof(m->fields[0]), "%.254s", persona->name);
     m->field_len[0] = (int)strlen(m->fields[0]);
     m->field_cursor[0] = m->field_len[0];
-    strncpy(m->fields[1], persona->description, sizeof(m->fields[1]) - 1);
+    snprintf(m->fields[1], sizeof(m->fields[1]), "%.254s",
+             persona->description);
     m->field_len[1] = (int)strlen(m->fields[1]);
     m->field_cursor[1] = m->field_len[1];
   }
@@ -1147,10 +1148,10 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         }
 
         ModelConfig mc = {0};
-        strncpy(mc.name, m->fields[0], sizeof(mc.name) - 1);
-        strncpy(mc.base_url, m->fields[1], sizeof(mc.base_url) - 1);
-        strncpy(mc.api_key, m->fields[2], sizeof(mc.api_key) - 1);
-        strncpy(mc.model_id, m->fields[3], sizeof(mc.model_id) - 1);
+        snprintf(mc.name, sizeof(mc.name), "%.63s", m->fields[0]);
+        snprintf(mc.base_url, sizeof(mc.base_url), "%.255s", m->fields[1]);
+        snprintf(mc.api_key, sizeof(mc.api_key), "%.255s", m->fields[2]);
+        snprintf(mc.model_id, sizeof(mc.model_id), "%.127s", m->fields[3]);
         mc.context_length = atoi(m->fields[4]);
         if (mc.context_length <= 0)
           mc.context_length = DEFAULT_CONTEXT_LENGTH;
@@ -1275,10 +1276,10 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         }
 
         ModelConfig *mc = &mf->models[m->edit_model_index];
-        strncpy(mc->name, m->fields[0], sizeof(mc->name) - 1);
-        strncpy(mc->base_url, m->fields[1], sizeof(mc->base_url) - 1);
-        strncpy(mc->api_key, m->fields[2], sizeof(mc->api_key) - 1);
-        strncpy(mc->model_id, m->fields[3], sizeof(mc->model_id) - 1);
+        snprintf(mc->name, sizeof(mc->name), "%.63s", m->fields[0]);
+        snprintf(mc->base_url, sizeof(mc->base_url), "%.255s", m->fields[1]);
+        snprintf(mc->api_key, sizeof(mc->api_key), "%.255s", m->fields[2]);
+        snprintf(mc->model_id, sizeof(mc->model_id), "%.127s", m->fields[3]);
         mc->context_length = atoi(m->fields[4]);
         if (mc->context_length <= 0)
           mc->context_length = DEFAULT_CONTEXT_LENGTH;
