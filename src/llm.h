@@ -17,6 +17,10 @@ typedef struct {
   size_t cap;
   bool success;
   char error[256];
+  int prompt_tokens;
+  int completion_tokens;
+  double elapsed_ms;
+  double output_tps;
 } LLMResponse;
 
 typedef struct {

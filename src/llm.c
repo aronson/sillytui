@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 
 static char *escape_json_string(const char *str);
 
@@ -15,6 +16,11 @@ typedef struct {
   char line_buffer[4096];
   size_t line_len;
   bool got_content;
+  int prompt_tokens;
+  int completion_tokens;
+  struct timeval first_token_time;
+  struct timeval last_token_time;
+  bool has_first_token;
 } StreamCtx;
 
 void llm_init(void) { curl_global_init(CURL_GLOBAL_DEFAULT); }
@@ -259,6 +265,20 @@ static char *find_json_string(const char *json, const char *key) {
   return result;
 }
 
+static int find_json_int(const char *json, const char *key) {
+  char search[64];
+  snprintf(search, sizeof(search), "\"%s\"", key);
+  const char *p = strstr(json, search);
+  if (!p)
+    return -1;
+  p += strlen(search);
+  while (*p && (*p == ' ' || *p == ':'))
+    p++;
+  if (*p == '-' || (*p >= '0' && *p <= '9'))
+    return atoi(p);
+  return -1;
+}
+
 static void process_sse_line(StreamCtx *ctx, const char *line) {
   if (strncmp(line, "data: ", 6) != 0)
     return;
@@ -266,6 +286,16 @@ static void process_sse_line(StreamCtx *ctx, const char *line) {
 
   if (strcmp(data, "[DONE]") == 0)
     return;
+
+  const char *usage = strstr(data, "\"usage\"");
+  if (usage) {
+    int prompt = find_json_int(usage, "prompt_tokens");
+    int completion = find_json_int(usage, "completion_tokens");
+    if (prompt > 0)
+      ctx->prompt_tokens = prompt;
+    if (completion > 0)
+      ctx->completion_tokens = completion;
+  }
 
   const char *choices = strstr(data, "\"choices\"");
   if (!choices)
@@ -281,6 +311,11 @@ static void process_sse_line(StreamCtx *ctx, const char *line) {
 
   char *content = find_json_string(delta, "content");
   if (content && content[0]) {
+    if (!ctx->has_first_token) {
+      gettimeofday(&ctx->first_token_time, NULL);
+      ctx->has_first_token = true;
+    }
+    gettimeofday(&ctx->last_token_time, NULL);
     ctx->got_content = true;
     append_to_response(ctx->resp, content, strlen(content));
     if (ctx->cb) {
@@ -773,8 +808,9 @@ static char *build_request_body(const ModelConfig *config,
     }
   }
 
-  pos +=
-      snprintf(body + pos, cap - pos, "],\"stream\":true,\"max_tokens\":512}");
+  pos += snprintf(body + pos, cap - pos,
+                  "],\"stream\":true,\"max_tokens\":512,\"stream_options\":{"
+                  "\"include_usage\":true}}");
   return body;
 }
 
@@ -818,7 +854,10 @@ LLMResponse llm_chat(const ModelConfig *config, const ChatHistory *history,
                    .progress_cb = progress_cb,
                    .userdata = userdata,
                    .line_len = 0,
-                   .got_content = false};
+                   .got_content = false,
+                   .prompt_tokens = 0,
+                   .completion_tokens = 0,
+                   .has_first_token = false};
 
   curl_easy_setopt(curl, CURLOPT_URL, url);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -844,7 +883,14 @@ LLMResponse llm_chat(const ModelConfig *config, const ChatHistory *history,
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progress_callback);
   curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
 
+  struct timeval start_time, end_time;
+  gettimeofday(&start_time, NULL);
+
   CURLcode res = curl_easy_perform(curl);
+
+  gettimeofday(&end_time, NULL);
+  double elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+                      (end_time.tv_usec - start_time.tv_usec) / 1000.0;
 
   if (res != CURLE_OK) {
     snprintf(resp.error, sizeof(resp.error), "Request failed: %s",
@@ -856,6 +902,19 @@ LLMResponse llm_chat(const ModelConfig *config, const ChatHistory *history,
       resp.success = true;
     } else {
       snprintf(resp.error, sizeof(resp.error), "HTTP %ld", http_code);
+    }
+  }
+
+  resp.prompt_tokens = ctx.prompt_tokens;
+  resp.completion_tokens = ctx.completion_tokens;
+  resp.elapsed_ms = elapsed_ms;
+
+  if (ctx.has_first_token && ctx.completion_tokens > 0) {
+    double gen_time_ms =
+        (ctx.last_token_time.tv_sec - ctx.first_token_time.tv_sec) * 1000.0 +
+        (ctx.last_token_time.tv_usec - ctx.first_token_time.tv_usec) / 1000.0;
+    if (gen_time_ms > 0) {
+      resp.output_tps = (ctx.completion_tokens * 1000.0) / gen_time_ms;
     }
   }
 

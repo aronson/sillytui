@@ -531,6 +531,17 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
         mvwaddstr(chat_win, y, x + 2, user_name);
         if (g_ui_colors)
           wattroff(chat_win, COLOR_PAIR(pair) | A_BOLD);
+
+        int user_tokens = history_get_token_count(history, dl->msg_index, 0);
+        if (user_tokens > 0) {
+          char tok_str[32];
+          snprintf(tok_str, sizeof(tok_str), " %d tok", user_tokens);
+          if (g_ui_colors)
+            wattron(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+          mvwaddstr(chat_win, y, x + 2 + (int)strlen(user_name), tok_str);
+          if (g_ui_colors)
+            wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+        }
       } else if (dl->is_bot) {
         int pair = is_selected ? COLOR_PAIR_BOT_SEL : COLOR_PAIR_BOT;
         if (g_ui_colors)
@@ -541,8 +552,11 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
           wattroff(chat_win, COLOR_PAIR(pair) | A_BOLD);
 
         size_t swipe_count = history_get_swipe_count(history, dl->msg_index);
+        size_t active = history_get_active_swipe(history, dl->msg_index);
+        int name_len = (int)strlen(bot_name);
+        int cursor_x = x + 2 + name_len;
+
         if (swipe_count > 1) {
-          size_t active = history_get_active_swipe(history, dl->msg_index);
           char swipe_str[32];
           snprintf(swipe_str, sizeof(swipe_str), " ◀ %zu/%zu ▶", active + 1,
                    swipe_count);
@@ -550,10 +564,47 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
               is_selected ? COLOR_PAIR_SWIPE_SEL : COLOR_PAIR_SWIPE;
           if (g_ui_colors)
             wattron(chat_win, COLOR_PAIR(swipe_pair));
-          int name_len = (int)strlen(bot_name);
-          mvwaddstr(chat_win, y, x + 2 + name_len, swipe_str);
+          mvwaddstr(chat_win, y, cursor_x, swipe_str);
           if (g_ui_colors)
             wattroff(chat_win, COLOR_PAIR(swipe_pair));
+          cursor_x += (int)strlen(swipe_str);
+        }
+
+        int tokens = history_get_token_count(history, dl->msg_index, active);
+        double gen_time = history_get_gen_time(history, dl->msg_index, active);
+        double output_tps =
+            history_get_output_tps(history, dl->msg_index, active);
+        if (tokens > 0 || gen_time > 0 || output_tps > 0) {
+          char stats_str[96];
+          int pos = 0;
+
+          if (tokens > 0) {
+            pos += snprintf(stats_str + pos, sizeof(stats_str) - pos, " %d tok",
+                            tokens);
+          }
+
+          if (output_tps > 0) {
+            pos += snprintf(stats_str + pos, sizeof(stats_str) - pos,
+                            " (%.1f t/s)", output_tps);
+          }
+
+          if (gen_time > 0) {
+            if (pos > 0)
+              pos += snprintf(stats_str + pos, sizeof(stats_str) - pos, " │");
+            if (gen_time >= 1000) {
+              pos += snprintf(stats_str + pos, sizeof(stats_str) - pos,
+                              " %.1fs", gen_time / 1000.0);
+            } else {
+              pos += snprintf(stats_str + pos, sizeof(stats_str) - pos,
+                              " %.0fms", gen_time);
+            }
+          }
+
+          if (g_ui_colors)
+            wattron(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+          mvwaddstr(chat_win, y, cursor_x, stats_str);
+          if (g_ui_colors)
+            wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
         }
       }
       continue;

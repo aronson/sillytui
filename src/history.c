@@ -17,6 +17,9 @@ static void message_init(ChatMessage *msg) {
   msg->swipes = NULL;
   msg->swipe_count = 0;
   msg->active_swipe = 0;
+  msg->token_counts = NULL;
+  msg->gen_times = NULL;
+  msg->output_tps = NULL;
 }
 
 static void message_free(ChatMessage *msg) {
@@ -26,7 +29,13 @@ static void message_free(ChatMessage *msg) {
     free(msg->swipes[i]);
   }
   free(msg->swipes);
+  free(msg->token_counts);
+  free(msg->gen_times);
+  free(msg->output_tps);
   msg->swipes = NULL;
+  msg->token_counts = NULL;
+  msg->gen_times = NULL;
+  msg->output_tps = NULL;
   msg->swipe_count = 0;
   msg->active_swipe = 0;
 }
@@ -64,14 +73,29 @@ size_t history_add(ChatHistory *history, const char *message) {
   message_init(msg);
 
   msg->swipes = malloc(sizeof(char *));
-  if (!msg->swipes)
+  msg->token_counts = malloc(sizeof(int));
+  msg->gen_times = malloc(sizeof(double));
+  msg->output_tps = malloc(sizeof(double));
+  if (!msg->swipes || !msg->token_counts || !msg->gen_times ||
+      !msg->output_tps) {
+    free(msg->swipes);
+    free(msg->token_counts);
+    free(msg->gen_times);
+    free(msg->output_tps);
     return SIZE_MAX;
+  }
 
   msg->swipes[0] = dup_string(message);
   if (!msg->swipes[0]) {
     free(msg->swipes);
+    free(msg->token_counts);
+    free(msg->gen_times);
+    free(msg->output_tps);
     return SIZE_MAX;
   }
+  msg->token_counts[0] = 0;
+  msg->gen_times[0] = 0.0;
+  msg->output_tps[0] = 0.0;
   msg->swipe_count = 1;
   msg->active_swipe = 0;
 
@@ -146,14 +170,35 @@ size_t history_add_swipe(ChatHistory *history, size_t msg_index,
 
   char **new_swipes =
       realloc(msg->swipes, (msg->swipe_count + 1) * sizeof(char *));
-  if (!new_swipes)
+  int *new_tokens =
+      realloc(msg->token_counts, (msg->swipe_count + 1) * sizeof(int));
+  double *new_times =
+      realloc(msg->gen_times, (msg->swipe_count + 1) * sizeof(double));
+  double *new_tps =
+      realloc(msg->output_tps, (msg->swipe_count + 1) * sizeof(double));
+  if (!new_swipes || !new_tokens || !new_times || !new_tps) {
+    if (new_swipes)
+      msg->swipes = new_swipes;
+    if (new_tokens)
+      msg->token_counts = new_tokens;
+    if (new_times)
+      msg->gen_times = new_times;
+    if (new_tps)
+      msg->output_tps = new_tps;
     return SIZE_MAX;
+  }
   msg->swipes = new_swipes;
+  msg->token_counts = new_tokens;
+  msg->gen_times = new_times;
+  msg->output_tps = new_tps;
 
   msg->swipes[msg->swipe_count] = dup_string(content);
   if (!msg->swipes[msg->swipe_count])
     return SIZE_MAX;
 
+  msg->token_counts[msg->swipe_count] = 0;
+  msg->gen_times[msg->swipe_count] = 0.0;
+  msg->output_tps[msg->swipe_count] = 0.0;
   msg->swipe_count++;
   msg->active_swipe = msg->swipe_count - 1;
   return msg->active_swipe;
@@ -193,6 +238,9 @@ bool history_delete(ChatHistory *history, size_t index) {
     free(msg->swipes[i]);
   }
   free(msg->swipes);
+  free(msg->token_counts);
+  free(msg->gen_times);
+  free(msg->output_tps);
 
   for (size_t i = index; i < history->count - 1; i++) {
     history->messages[i] = history->messages[i + 1];
@@ -200,4 +248,64 @@ bool history_delete(ChatHistory *history, size_t index) {
   history->count--;
 
   return true;
+}
+
+void history_set_token_count(ChatHistory *history, size_t msg_index,
+                             size_t swipe_index, int tokens) {
+  if (msg_index >= history->count)
+    return;
+  ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count || !msg->token_counts)
+    return;
+  msg->token_counts[swipe_index] = tokens;
+}
+
+int history_get_token_count(const ChatHistory *history, size_t msg_index,
+                            size_t swipe_index) {
+  if (msg_index >= history->count)
+    return 0;
+  const ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count || !msg->token_counts)
+    return 0;
+  return msg->token_counts[swipe_index];
+}
+
+void history_set_gen_time(ChatHistory *history, size_t msg_index,
+                          size_t swipe_index, double time_ms) {
+  if (msg_index >= history->count)
+    return;
+  ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count || !msg->gen_times)
+    return;
+  msg->gen_times[swipe_index] = time_ms;
+}
+
+double history_get_gen_time(const ChatHistory *history, size_t msg_index,
+                            size_t swipe_index) {
+  if (msg_index >= history->count)
+    return 0.0;
+  const ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count || !msg->gen_times)
+    return 0.0;
+  return msg->gen_times[swipe_index];
+}
+
+void history_set_output_tps(ChatHistory *history, size_t msg_index,
+                            size_t swipe_index, double tps) {
+  if (msg_index >= history->count)
+    return;
+  ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count || !msg->output_tps)
+    return;
+  msg->output_tps[swipe_index] = tps;
+}
+
+double history_get_output_tps(const ChatHistory *history, size_t msg_index,
+                              size_t swipe_index) {
+  if (msg_index >= history->count)
+    return 0.0;
+  const ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count || !msg->output_tps)
+    return 0.0;
+  return msg->output_tps[swipe_index];
 }

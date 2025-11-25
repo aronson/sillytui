@@ -185,10 +185,17 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
                  bot_name, false);
   } else if (ctx.buf_len == 0) {
     history_update(history, msg_index, "Bot: *stays silent*");
-    *selected_msg = MSG_SELECT_NONE;
-    ui_draw_chat(chat_win, history, *selected_msg, model_name, user_name,
-                 bot_name, false);
+  } else {
+    size_t active_swipe = history_get_active_swipe(history, msg_index);
+    history_set_token_count(history, msg_index, active_swipe,
+                            resp.completion_tokens);
+    history_set_gen_time(history, msg_index, active_swipe, resp.elapsed_ms);
+    history_set_output_tps(history, msg_index, active_swipe, resp.output_tps);
   }
+
+  *selected_msg = MSG_SELECT_NONE;
+  ui_draw_chat(chat_win, history, *selected_msg, model_name, user_name,
+               bot_name, false);
 
   free(ctx.buffer);
   llm_response_free(&resp);
@@ -1094,6 +1101,15 @@ int main(void) {
                 history_update(&history, selected_msg, err_msg);
               } else if (ctx.buf_len == 0) {
                 history_update(&history, selected_msg, "Bot: *stays silent*");
+              } else {
+                size_t active_swipe =
+                    history_get_active_swipe(&history, selected_msg);
+                history_set_token_count(&history, selected_msg, active_swipe,
+                                        resp.completion_tokens);
+                history_set_gen_time(&history, selected_msg, active_swipe,
+                                     resp.elapsed_ms);
+                history_set_output_tps(&history, selected_msg, active_swipe,
+                                       resp.output_tps);
               }
 
               free(ctx.buffer);
@@ -1103,7 +1119,7 @@ int main(void) {
             input_focused = true;
             touchwin(chat_win);
             touchwin(input_win);
-            ui_draw_chat(chat_win, &history, selected_msg,
+            ui_draw_chat(chat_win, &history, MSG_SELECT_NONE,
                          get_model_name(&models), user_disp, bot_disp, false);
             ui_draw_input_multiline(input_win, input_buffer, cursor_pos,
                                     input_focused, input_scroll_line, false);
@@ -1328,7 +1344,13 @@ int main(void) {
                                      current_input_height);
       }
 
-      if (history_add(&history, user_line) != SIZE_MAX) {
+      size_t user_msg_idx = history_add(&history, user_line);
+      if (user_msg_idx != SIZE_MAX) {
+        ModelConfig *model = config_get_active(&models);
+        if (model) {
+          int user_tokens = llm_tokenize(model, saved_input);
+          history_set_token_count(&history, user_msg_idx, 0, user_tokens);
+        }
         selected_msg = MSG_SELECT_NONE;
         input_focused = true;
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
