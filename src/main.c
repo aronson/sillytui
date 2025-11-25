@@ -476,10 +476,23 @@ int main(void) {
   char current_char_path[CHAT_CHAR_PATH_MAX] = {0};
 
   if (models.count == 0) {
-    history_add(&history, "Bot: *waves* \"Welcome! Use /model set to configure "
-                          "an LLM, or /help for commands.\"");
+    history_add(
+        &history,
+        "Bot: *Welcome to SillyTUI!*\n\n"
+        "To get started:\n"
+        "  • /model set - Configure an LLM (API URL, key, model)\n"
+        "  • /help - View all available commands\n\n"
+        "Once configured, load a character card with /char load <path>\n"
+        "or simply type a message here!");
   } else {
-    history_add(&history, "Bot: *waves* \"Ready to chat!\"");
+    history_add(&history,
+                "Bot: *Welcome back!*\n\n"
+                "Quick tips:\n"
+                "  • /char load <path> - Load a character card\n"
+                "  • /chat load - Resume a saved conversation\n"
+                "  • /help - View all commands\n"
+                "  • ↑↓ arrows - Navigate messages, ←→ on bot msgs to swipe\n\n"
+                "Type a message to begin!");
   }
 
   const char *user_disp = get_user_display_name(&persona);
