@@ -898,12 +898,42 @@ static char *build_request_body(const ModelConfig *config,
     }
 
     for (int i = 0; i < s->custom_count; i++) {
-      if (s->custom[i].is_int) {
-        pos += snprintf(body + pos, cap - pos, ",\"%s\":%d", s->custom[i].name,
-                        (int)s->custom[i].value);
+      const CustomSampler *cs = &s->custom[i];
+      if (cs->type == SAMPLER_TYPE_STRING) {
+        char *escaped = escape_json_string(cs->str_value);
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":\"%s\"", cs->name,
+                        escaped ? escaped : cs->str_value);
+        free(escaped);
+      } else if (cs->type == SAMPLER_TYPE_INT) {
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":%d", cs->name,
+                        (int)cs->value);
+      } else if (cs->type == SAMPLER_TYPE_LIST_FLOAT ||
+                 cs->type == SAMPLER_TYPE_LIST_INT) {
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":[", cs->name);
+        for (int j = 0; j < cs->list_count; j++) {
+          if (cs->type == SAMPLER_TYPE_LIST_INT)
+            pos +=
+                snprintf(body + pos, cap - pos, "%d", (int)cs->list_values[j]);
+          else
+            pos += snprintf(body + pos, cap - pos, "%.4g", cs->list_values[j]);
+          if (j < cs->list_count - 1)
+            pos += snprintf(body + pos, cap - pos, ",");
+        }
+        pos += snprintf(body + pos, cap - pos, "]");
+      } else if (cs->type == SAMPLER_TYPE_LIST_STRING) {
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":[", cs->name);
+        for (int j = 0; j < cs->list_count; j++) {
+          char *escaped = escape_json_string(cs->list_strings[j]);
+          pos += snprintf(body + pos, cap - pos, "\"%s\"",
+                          escaped ? escaped : cs->list_strings[j]);
+          free(escaped);
+          if (j < cs->list_count - 1)
+            pos += snprintf(body + pos, cap - pos, ",");
+        }
+        pos += snprintf(body + pos, cap - pos, "]");
       } else {
-        pos += snprintf(body + pos, cap - pos, ",\"%s\":%.4g",
-                        s->custom[i].name, s->custom[i].value);
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":%.4g", cs->name,
+                        cs->value);
       }
     }
   }

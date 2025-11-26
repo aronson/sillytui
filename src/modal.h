@@ -77,12 +77,17 @@ typedef struct {
   bool sampler_adding_custom;
   int sampler_custom_field;
   char sampler_custom_name[64];
-  char sampler_custom_value[32];
+  char sampler_custom_value[256];
   char sampler_custom_min[32];
   char sampler_custom_max[32];
   char sampler_custom_step[32];
-  bool sampler_custom_is_int;
+  SamplerValueType sampler_custom_type;
   int sampler_custom_cursor;
+  bool sampler_editing_list;
+  int sampler_list_index;
+  int sampler_list_scroll;
+  char sampler_list_input[256];
+  int sampler_list_input_cursor;
 } Modal;
 
 typedef enum {

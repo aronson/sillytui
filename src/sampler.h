@@ -6,14 +6,29 @@
 
 #define MAX_CUSTOM_SAMPLERS 32
 #define CUSTOM_SAMPLER_NAME_LEN 64
+#define CUSTOM_SAMPLER_STR_LEN 256
+#define MAX_LIST_ITEMS 32
+
+typedef enum {
+  SAMPLER_TYPE_FLOAT = 0,
+  SAMPLER_TYPE_INT,
+  SAMPLER_TYPE_STRING,
+  SAMPLER_TYPE_LIST_FLOAT,
+  SAMPLER_TYPE_LIST_INT,
+  SAMPLER_TYPE_LIST_STRING
+} SamplerValueType;
 
 typedef struct {
   char name[CUSTOM_SAMPLER_NAME_LEN];
+  SamplerValueType type;
   double value;
-  bool is_int;
+  char str_value[CUSTOM_SAMPLER_STR_LEN];
   double min_val;
   double max_val;
   double step;
+  double list_values[MAX_LIST_ITEMS];
+  char list_strings[MAX_LIST_ITEMS][64];
+  int list_count;
 } CustomSampler;
 
 typedef struct {
@@ -57,8 +72,9 @@ typedef struct {
 void sampler_init_defaults(SamplerSettings *s);
 bool sampler_load(SamplerSettings *s, ApiType api_type);
 bool sampler_save(const SamplerSettings *s, ApiType api_type);
-bool sampler_add_custom(SamplerSettings *s, const char *name, double value,
-                        bool is_int, double min_val, double max_val,
+bool sampler_add_custom(SamplerSettings *s, const char *name,
+                        SamplerValueType type, double value,
+                        const char *str_value, double min_val, double max_val,
                         double step);
 bool sampler_remove_custom(SamplerSettings *s, int index);
 

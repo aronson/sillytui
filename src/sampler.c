@@ -225,8 +225,12 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
           if (*p == '{') {
             p++;
             char cname[CUSTOM_SAMPLER_NAME_LEN] = {0};
+            char cstr[CUSTOM_SAMPLER_STR_LEN] = {0};
             double cval = 0, cmin = 0, cmax = 100, cstep = 0.1;
-            bool cint = false;
+            SamplerValueType ctype = SAMPLER_TYPE_FLOAT;
+            double list_vals[MAX_LIST_ITEMS] = {0};
+            char list_strs[MAX_LIST_ITEMS][64] = {{0}};
+            int list_cnt = 0;
             while (*p && *p != '}') {
               p = skip_ws(p);
               if (*p == ',') {
@@ -245,12 +249,28 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
                 p = parse_string(p, cname, sizeof(cname));
               } else if (strcmp(ckey, "value") == 0) {
                 cval = parse_double(&p);
+              } else if (strcmp(ckey, "str_value") == 0) {
+                p = parse_string(p, cstr, sizeof(cstr));
+              } else if (strcmp(ckey, "type") == 0) {
+                char tstr[16] = {0};
+                p = parse_string(p, tstr, sizeof(tstr));
+                if (strcmp(tstr, "int") == 0)
+                  ctype = SAMPLER_TYPE_INT;
+                else if (strcmp(tstr, "string") == 0)
+                  ctype = SAMPLER_TYPE_STRING;
+                else if (strcmp(tstr, "list_float") == 0)
+                  ctype = SAMPLER_TYPE_LIST_FLOAT;
+                else if (strcmp(tstr, "list_int") == 0)
+                  ctype = SAMPLER_TYPE_LIST_INT;
+                else if (strcmp(tstr, "list_string") == 0)
+                  ctype = SAMPLER_TYPE_LIST_STRING;
+                else
+                  ctype = SAMPLER_TYPE_FLOAT;
               } else if (strcmp(ckey, "is_int") == 0) {
                 if (strncmp(p, "true", 4) == 0) {
-                  cint = true;
+                  ctype = SAMPLER_TYPE_INT;
                   p += 4;
                 } else if (strncmp(p, "false", 5) == 0) {
-                  cint = false;
                   p += 5;
                 }
               } else if (strcmp(ckey, "min") == 0) {
@@ -259,6 +279,30 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
                 cmax = parse_double(&p);
               } else if (strcmp(ckey, "step") == 0) {
                 cstep = parse_double(&p);
+              } else if (strcmp(ckey, "list") == 0) {
+                if (*p == '[') {
+                  p++;
+                  while (*p && *p != ']' && list_cnt < MAX_LIST_ITEMS) {
+                    p = skip_ws(p);
+                    if (*p == ',') {
+                      p++;
+                      continue;
+                    }
+                    if (*p == '"') {
+                      char tmp[64] = {0};
+                      p = parse_string(p, tmp, sizeof(tmp));
+                      strncpy(list_strs[list_cnt], tmp, 63);
+                      list_cnt++;
+                    } else if (*p == '-' || (*p >= '0' && *p <= '9')) {
+                      list_vals[list_cnt] = parse_double(&p);
+                      list_cnt++;
+                    } else {
+                      break;
+                    }
+                  }
+                  if (*p == ']')
+                    p++;
+                }
               }
             }
             if (*p == '}')
@@ -266,11 +310,18 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
             if (cname[0] && s->custom_count < MAX_CUSTOM_SAMPLERS) {
               CustomSampler *cs = &s->custom[s->custom_count];
               strncpy(cs->name, cname, CUSTOM_SAMPLER_NAME_LEN - 1);
+              cs->type = ctype;
               cs->value = cval;
-              cs->is_int = cint;
+              strncpy(cs->str_value, cstr, CUSTOM_SAMPLER_STR_LEN - 1);
               cs->min_val = cmin;
               cs->max_val = cmax;
-              cs->step = cstep > 0 ? cstep : (cint ? 1.0 : 0.1);
+              cs->step =
+                  cstep > 0 ? cstep : (ctype == SAMPLER_TYPE_INT ? 1.0 : 0.1);
+              cs->list_count = list_cnt;
+              for (int li = 0; li < list_cnt; li++) {
+                cs->list_values[li] = list_vals[li];
+                strncpy(cs->list_strings[li], list_strs[li], 63);
+              }
               s->custom_count++;
             }
           } else {
@@ -334,11 +385,63 @@ bool sampler_save(const SamplerSettings *s, ApiType api_type) {
     fprintf(f, ",\n  \"custom\": [\n");
     for (int i = 0; i < s->custom_count; i++) {
       const CustomSampler *cs = &s->custom[i];
-      fprintf(f,
-              "    {\"name\": \"%s\", \"value\": %.4g, \"is_int\": %s, "
-              "\"min\": %.4g, \"max\": %.4g, \"step\": %.4g}%s\n",
-              cs->name, cs->value, cs->is_int ? "true" : "false", cs->min_val,
-              cs->max_val, cs->step, i < s->custom_count - 1 ? "," : "");
+      const char *type_str;
+      switch (cs->type) {
+      case SAMPLER_TYPE_INT:
+        type_str = "int";
+        break;
+      case SAMPLER_TYPE_STRING:
+        type_str = "string";
+        break;
+      case SAMPLER_TYPE_LIST_FLOAT:
+        type_str = "list_float";
+        break;
+      case SAMPLER_TYPE_LIST_INT:
+        type_str = "list_int";
+        break;
+      case SAMPLER_TYPE_LIST_STRING:
+        type_str = "list_string";
+        break;
+      default:
+        type_str = "float";
+        break;
+      }
+
+      if (cs->type == SAMPLER_TYPE_STRING) {
+        fprintf(f,
+                "    {\"name\": \"%s\", \"type\": \"%s\", \"str_value\": "
+                "\"%s\"}%s\n",
+                cs->name, type_str, cs->str_value,
+                i < s->custom_count - 1 ? "," : "");
+      } else if (cs->type == SAMPLER_TYPE_LIST_FLOAT ||
+                 cs->type == SAMPLER_TYPE_LIST_INT) {
+        fprintf(f, "    {\"name\": \"%s\", \"type\": \"%s\", \"list\": [",
+                cs->name, type_str);
+        for (int j = 0; j < cs->list_count; j++) {
+          if (cs->type == SAMPLER_TYPE_LIST_INT)
+            fprintf(f, "%d", (int)cs->list_values[j]);
+          else
+            fprintf(f, "%.4g", cs->list_values[j]);
+          if (j < cs->list_count - 1)
+            fprintf(f, ", ");
+        }
+        fprintf(f, "]}%s\n", i < s->custom_count - 1 ? "," : "");
+      } else if (cs->type == SAMPLER_TYPE_LIST_STRING) {
+        fprintf(f, "    {\"name\": \"%s\", \"type\": \"%s\", \"list\": [",
+                cs->name, type_str);
+        for (int j = 0; j < cs->list_count; j++) {
+          fprintf(f, "\"%s\"", cs->list_strings[j]);
+          if (j < cs->list_count - 1)
+            fprintf(f, ", ");
+        }
+        fprintf(f, "]}%s\n", i < s->custom_count - 1 ? "," : "");
+      } else {
+        fprintf(f,
+                "    {\"name\": \"%s\", \"type\": \"%s\", \"value\": %.4g, "
+                "\"min\": %.4g, \"max\": %.4g, \"step\": %.4g}%s\n",
+                cs->name, type_str, cs->value, cs->min_val, cs->max_val,
+                cs->step, i < s->custom_count - 1 ? "," : "");
+      }
     }
     fprintf(f, "  ]\n");
   } else {
@@ -350,19 +453,26 @@ bool sampler_save(const SamplerSettings *s, ApiType api_type) {
   return true;
 }
 
-bool sampler_add_custom(SamplerSettings *s, const char *name, double value,
-                        bool is_int, double min_val, double max_val,
+bool sampler_add_custom(SamplerSettings *s, const char *name,
+                        SamplerValueType type, double value,
+                        const char *str_value, double min_val, double max_val,
                         double step) {
   if (s->custom_count >= MAX_CUSTOM_SAMPLERS)
     return false;
   CustomSampler *cs = &s->custom[s->custom_count];
+  memset(cs, 0, sizeof(*cs));
   strncpy(cs->name, name, CUSTOM_SAMPLER_NAME_LEN - 1);
   cs->name[CUSTOM_SAMPLER_NAME_LEN - 1] = '\0';
+  cs->type = type;
   cs->value = value;
-  cs->is_int = is_int;
+  if (str_value) {
+    strncpy(cs->str_value, str_value, CUSTOM_SAMPLER_STR_LEN - 1);
+    cs->str_value[CUSTOM_SAMPLER_STR_LEN - 1] = '\0';
+  }
   cs->min_val = min_val;
   cs->max_val = max_val;
-  cs->step = step > 0 ? step : (is_int ? 1.0 : 0.1);
+  cs->step = step > 0 ? step : (type == SAMPLER_TYPE_INT ? 1.0 : 0.1);
+  cs->list_count = 0;
   s->custom_count++;
   return true;
 }

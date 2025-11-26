@@ -278,10 +278,10 @@ void modal_open_sampler_settings(Modal *m, ApiType api_type) {
   m->sampler_custom_min[0] = '\0';
   m->sampler_custom_max[0] = '\0';
   m->sampler_custom_step[0] = '\0';
-  m->sampler_custom_is_int = false;
+  m->sampler_custom_type = SAMPLER_TYPE_FLOAT;
   m->sampler_custom_cursor = 0;
   sampler_load(&m->sampler, api_type);
-  create_window(m, 22, 46);
+  create_window(m, 24, 58);
 }
 
 int modal_get_edit_msg_index(const Modal *m) { return m->edit_msg_index; }
@@ -1129,22 +1129,23 @@ static void draw_sampler_settings(Modal *m) {
       if (val_normalized > 1.0)
         val_normalized = 1.0;
 
+      int left_pad = 6;
       if (is_selected) {
         wattron(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
-        mvwaddstr(w, y, 2, "▸");
+        mvwaddstr(w, y, left_pad, "▸");
         wattroff(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
       } else {
-        mvwaddstr(w, y, 2, " ");
+        mvwaddstr(w, y, left_pad, " ");
       }
 
       if (is_selected)
         wattron(w, A_BOLD);
-      mvwprintw(w, y, 4, "%-13s", f->name);
+      mvwprintw(w, y, left_pad + 2, "%-13s", f->name);
       if (is_selected)
         wattroff(w, A_BOLD);
 
-      int bar_width = 12;
-      int bar_x = 18;
+      int bar_width = 14;
+      int bar_x = left_pad + 16;
       int filled = (int)(val_normalized * bar_width);
 
       mvwaddstr(w, y, bar_x, "│");
@@ -1179,67 +1180,103 @@ static void draw_sampler_settings(Modal *m) {
     } else {
       int custom_idx = idx - base_field_count;
       CustomSampler *cs = &s->custom[custom_idx];
+      int left_pad = 6;
 
       if (is_selected) {
         wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
-        mvwaddstr(w, y, 2, "▸");
+        mvwaddstr(w, y, left_pad, "▸");
         wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
       } else {
-        mvwaddstr(w, y, 2, " ");
+        mvwaddstr(w, y, left_pad, " ");
       }
 
       if (is_selected)
         wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
       else
         wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
-      mvwprintw(w, y, 4, "%-13.13s", cs->name);
+      mvwprintw(w, y, left_pad + 2, "%-13.13s", cs->name);
       if (is_selected)
         wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
       else
         wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
 
-      char val_str[32];
-      if (cs->is_int)
+      char val_str[64];
+      if (cs->type == SAMPLER_TYPE_STRING) {
+        snprintf(val_str, sizeof(val_str), "%.20s", cs->str_value);
+      } else if (cs->type == SAMPLER_TYPE_INT) {
         snprintf(val_str, sizeof(val_str), "%d", (int)cs->value);
-      else
-        snprintf(val_str, sizeof(val_str), "%.3g", cs->value);
-
-      double val_normalized = 0.0;
-      if (cs->max_val > cs->min_val)
-        val_normalized =
-            (cs->value - cs->min_val) / (cs->max_val - cs->min_val);
-      if (val_normalized < 0.0)
-        val_normalized = 0.0;
-      if (val_normalized > 1.0)
-        val_normalized = 1.0;
-
-      int bar_width = 12;
-      int bar_x = 18;
-      int filled = (int)(val_normalized * bar_width);
-
-      mvwaddstr(w, y, bar_x, "│");
-      for (int b = 0; b < bar_width; b++) {
-        if (b < filled) {
-          wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
-          waddstr(w, "━");
-          wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+      } else if (cs->type == SAMPLER_TYPE_LIST_FLOAT ||
+                 cs->type == SAMPLER_TYPE_LIST_INT ||
+                 cs->type == SAMPLER_TYPE_LIST_STRING) {
+        if (cs->list_count == 0) {
+          snprintf(val_str, sizeof(val_str), "(empty)");
+        } else if (cs->list_count == 1) {
+          if (cs->type == SAMPLER_TYPE_LIST_STRING)
+            snprintf(val_str, sizeof(val_str), "[%.12s]", cs->list_strings[0]);
+          else if (cs->type == SAMPLER_TYPE_LIST_INT)
+            snprintf(val_str, sizeof(val_str), "[%d]", (int)cs->list_values[0]);
+          else
+            snprintf(val_str, sizeof(val_str), "[%.4g]", cs->list_values[0]);
         } else {
-          wattron(w, A_DIM);
-          waddstr(w, "─");
-          wattroff(w, A_DIM);
+          snprintf(val_str, sizeof(val_str), "[%d items]", cs->list_count);
         }
+      } else {
+        snprintf(val_str, sizeof(val_str), "%.3g", cs->value);
       }
-      waddstr(w, "│");
 
-      int val_x = bar_x + bar_width + 3;
+      int val_x;
+      int tag_x = left_pad + 16;
+      if (cs->type == SAMPLER_TYPE_STRING) {
+        wattron(w, A_DIM);
+        mvwprintw(w, y, tag_x, "[str]");
+        wattroff(w, A_DIM);
+        val_x = tag_x + 6;
+      } else if (cs->type >= SAMPLER_TYPE_LIST_FLOAT) {
+        const char *tag = cs->type == SAMPLER_TYPE_LIST_STRING ? "[s]"
+                          : cs->type == SAMPLER_TYPE_LIST_INT  ? "[i]"
+                                                               : "[f]";
+        wattron(w, A_DIM);
+        mvwprintw(w, y, tag_x, "%s", tag);
+        wattroff(w, A_DIM);
+        val_x = tag_x + 4;
+      } else {
+        double val_normalized = 0.0;
+        if (cs->max_val > cs->min_val)
+          val_normalized =
+              (cs->value - cs->min_val) / (cs->max_val - cs->min_val);
+        if (val_normalized < 0.0)
+          val_normalized = 0.0;
+        if (val_normalized > 1.0)
+          val_normalized = 1.0;
+
+        int bar_width = 14;
+        int bar_x = tag_x;
+        int filled = (int)(val_normalized * bar_width);
+
+        mvwaddstr(w, y, bar_x, "│");
+        for (int b = 0; b < bar_width; b++) {
+          if (b < filled) {
+            wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+            waddstr(w, "━");
+            wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+          } else {
+            wattron(w, A_DIM);
+            waddstr(w, "─");
+            wattroff(w, A_DIM);
+          }
+        }
+        waddstr(w, "│");
+        val_x = bar_x + bar_width + 3;
+      }
+
       if (is_selected && m->sampler_input[0]) {
         wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
-        mvwprintw(w, y, val_x, "%-8s", m->sampler_input);
+        mvwprintw(w, y, val_x, "%-12s", m->sampler_input);
         wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
       } else {
         if (is_selected)
           wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
-        mvwprintw(w, y, val_x, "%-8s", val_str);
+        mvwprintw(w, y, val_x, "%-12s", val_str);
         if (is_selected)
           wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
       }
@@ -1285,7 +1322,7 @@ static void draw_sampler_settings(Modal *m) {
   wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
 
   if (m->sampler_adding_custom) {
-    int dw = 40, dh = 12;
+    int dw = 52, dh = 12;
     int dx = (m->width - dw) / 2;
     int dy = (m->height - dh) / 2;
 
@@ -1313,57 +1350,190 @@ static void draw_sampler_settings(Modal *m) {
     mvwprintw(w, dy + 2, dx + 2, "Name:");
     if (m->sampler_custom_field == 0)
       wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 2, dx + 8, "%-20.20s", m->sampler_custom_name);
+    mvwprintw(w, dy + 2, dx + 8, "%-32.32s", m->sampler_custom_name);
     if (m->sampler_custom_field == 0)
       wattroff(w, A_REVERSE);
 
     mvwprintw(w, dy + 3, dx + 2, "Type:");
-    if (m->sampler_custom_field == 1) {
-      wattron(w, A_REVERSE);
+    const char *types[] = {"float", "int", "str", "[f]", "[i]", "[s]"};
+    int type_idx = (int)m->sampler_custom_type;
+    int type_pos[] = {0, 7, 12, 17, 22, 27};
+    if (m->sampler_custom_field == 1)
+      wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+    mvwprintw(w, dy + 3, dx + 7, "←");
+    wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+    for (int t = 0; t < 6; t++) {
+      if (t == type_idx)
+        wattron(w, A_BOLD | A_REVERSE);
+      mvwprintw(w, dy + 3, dx + 9 + type_pos[t], "%s", types[t]);
+      if (t == type_idx)
+        wattroff(w, A_BOLD | A_REVERSE);
     }
-    mvwprintw(w, dy + 3, dx + 8,
-              m->sampler_custom_is_int ? "[int]  float " : " int  [float]");
-    if (m->sampler_custom_field == 1) {
-      wattroff(w, A_REVERSE);
+    if (m->sampler_custom_field == 1)
+      wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+    mvwprintw(w, dy + 3, dx + 40, "→");
+    wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+
+    if (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT) {
+      wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      mvwprintw(w, dy + 4, dx + 2, "(List items added after creation)");
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    } else {
+      mvwprintw(w, dy + 4, dx + 2, "Value:");
+      if (m->sampler_custom_field == 2)
+        wattron(w, A_REVERSE);
+      if (m->sampler_custom_type == SAMPLER_TYPE_STRING) {
+        mvwprintw(w, dy + 4, dx + 9, "%-38.38s", m->sampler_custom_value);
+      } else {
+        mvwprintw(w, dy + 4, dx + 9, "%-10.10s", m->sampler_custom_value);
+      }
+      if (m->sampler_custom_field == 2)
+        wattroff(w, A_REVERSE);
     }
 
-    mvwprintw(w, dy + 4, dx + 2, "Value:");
-    if (m->sampler_custom_field == 2)
-      wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 4, dx + 9, "%-8.8s", m->sampler_custom_value);
-    if (m->sampler_custom_field == 2)
-      wattroff(w, A_REVERSE);
+    if (m->sampler_custom_type < SAMPLER_TYPE_STRING) {
+      mvwprintw(w, dy + 5, dx + 2, "Min:");
+      if (m->sampler_custom_field == 3)
+        wattron(w, A_REVERSE);
+      mvwprintw(w, dy + 5, dx + 7, "%-8.8s",
+                m->sampler_custom_min[0] ? m->sampler_custom_min : "0");
+      if (m->sampler_custom_field == 3)
+        wattroff(w, A_REVERSE);
 
-    mvwprintw(w, dy + 5, dx + 2, "Min:");
-    if (m->sampler_custom_field == 3)
-      wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 5, dx + 7, "%-8.8s",
-              m->sampler_custom_min[0] ? m->sampler_custom_min : "0");
-    if (m->sampler_custom_field == 3)
-      wattroff(w, A_REVERSE);
+      mvwprintw(w, dy + 5, dx + 18, "Max:");
+      if (m->sampler_custom_field == 4)
+        wattron(w, A_REVERSE);
+      mvwprintw(w, dy + 5, dx + 23, "%-8.8s",
+                m->sampler_custom_max[0] ? m->sampler_custom_max : "100");
+      if (m->sampler_custom_field == 4)
+        wattroff(w, A_REVERSE);
 
-    mvwprintw(w, dy + 5, dx + 18, "Max:");
-    if (m->sampler_custom_field == 4)
-      wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 5, dx + 23, "%-8.8s",
-              m->sampler_custom_max[0] ? m->sampler_custom_max : "100");
-    if (m->sampler_custom_field == 4)
-      wattroff(w, A_REVERSE);
-
-    mvwprintw(w, dy + 6, dx + 2, "Step:");
-    if (m->sampler_custom_field == 5)
-      wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 6, dx + 8, "%-8.8s",
-              m->sampler_custom_step[0]
-                  ? m->sampler_custom_step
-                  : (m->sampler_custom_is_int ? "1" : "0.1"));
-    if (m->sampler_custom_field == 5)
-      wattroff(w, A_REVERSE);
+      mvwprintw(w, dy + 6, dx + 2, "Step:");
+      if (m->sampler_custom_field == 5)
+        wattron(w, A_REVERSE);
+      mvwprintw(
+          w, dy + 6, dx + 8, "%-8.8s",
+          m->sampler_custom_step[0]
+              ? m->sampler_custom_step
+              : (m->sampler_custom_type == SAMPLER_TYPE_INT ? "1" : "0.1"));
+      if (m->sampler_custom_field == 5)
+        wattroff(w, A_REVERSE);
+    }
 
     wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
     mvwprintw(w, dy + 8, dx + 2, "Tab:next ←→:type Enter:add");
     mvwprintw(w, dy + 9, dx + 2, "Esc:cancel");
     wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+  }
+
+  if (m->sampler_editing_list) {
+    int base_count = 27;
+    int idx = m->sampler_field_index;
+    if (idx >= base_count) {
+      CustomSampler *cs = &s->custom[idx - base_count];
+
+      int dw = 50, dh = 16;
+      int dx = (m->width - dw) / 2;
+      int dy = (m->height - dh) / 2;
+
+      for (int yy = dy; yy < dy + dh; yy++) {
+        mvwhline(w, yy, dx, ' ', dw);
+      }
+
+      wattron(w, COLOR_PAIR(COLOR_PAIR_BORDER));
+      for (int yy = dy; yy < dy + dh; yy++) {
+        mvwaddstr(w, yy, dx, "│");
+        mvwaddstr(w, yy, dx + dw - 1, "│");
+      }
+      mvwhline(w, dy, dx + 1, ACS_HLINE, dw - 2);
+      mvwhline(w, dy + dh - 1, dx + 1, ACS_HLINE, dw - 2);
+      mvwaddch(w, dy, dx, ACS_ULCORNER);
+      mvwaddch(w, dy, dx + dw - 1, ACS_URCORNER);
+      mvwaddch(w, dy + dh - 1, dx, ACS_LLCORNER);
+      mvwaddch(w, dy + dh - 1, dx + dw - 1, ACS_LRCORNER);
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_BORDER));
+
+      char title[64];
+      snprintf(title, sizeof(title), " %s (%d items) ", cs->name,
+               cs->list_count);
+      wattron(w, A_BOLD);
+      mvwprintw(w, dy, dx + (dw - (int)strlen(title)) / 2, "%s", title);
+      wattroff(w, A_BOLD);
+
+      int visible = dh - 5;
+      int start = m->sampler_list_scroll;
+      if (start > cs->list_count - visible)
+        start = cs->list_count - visible;
+      if (start < 0)
+        start = 0;
+
+      for (int i = 0; i < visible; i++) {
+        int li = start + i;
+        int row = dy + 2 + i;
+
+        if (li >= cs->list_count) {
+          if (li == cs->list_count && m->sampler_list_index == li) {
+            wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
+            mvwprintw(w, row, dx + 2, "▸ + Add new item");
+            wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
+          }
+          continue;
+        }
+
+        bool is_sel = (li == m->sampler_list_index);
+
+        if (is_sel) {
+          wattron(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+          mvwaddstr(w, row, dx + 2, "▸");
+          wattroff(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+        } else {
+          mvwaddstr(w, row, dx + 2, " ");
+        }
+
+        wattron(w, A_DIM);
+        mvwprintw(w, row, dx + 4, "%2d.", li + 1);
+        wattroff(w, A_DIM);
+
+        char item_str[40];
+        if (cs->type == SAMPLER_TYPE_LIST_STRING)
+          snprintf(item_str, sizeof(item_str), "%.36s", cs->list_strings[li]);
+        else if (cs->type == SAMPLER_TYPE_LIST_INT)
+          snprintf(item_str, sizeof(item_str), "%d", (int)cs->list_values[li]);
+        else
+          snprintf(item_str, sizeof(item_str), "%.6g", cs->list_values[li]);
+
+        if (is_sel && m->sampler_list_input[0]) {
+          wattron(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+          mvwprintw(w, row, dx + 8, "%-38.38s", m->sampler_list_input);
+          wattroff(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+        } else {
+          if (is_sel)
+            wattron(w, COLOR_PAIR(COLOR_PAIR_USER));
+          mvwprintw(w, row, dx + 8, "%-38.38s", item_str);
+          if (is_sel)
+            wattroff(w, COLOR_PAIR(COLOR_PAIR_USER));
+        }
+      }
+
+      if (start > 0) {
+        wattron(w, COLOR_PAIR(COLOR_PAIR_HINT));
+        mvwaddstr(w, dy + 2, dx + dw - 2, "▲");
+        wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT));
+      }
+      if (start + visible < cs->list_count + 1) {
+        wattron(w, COLOR_PAIR(COLOR_PAIR_HINT));
+        mvwaddstr(w, dy + dh - 4, dx + dw - 2, "▼");
+        wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT));
+      }
+
+      mvwhline(w, dy + dh - 3, dx + 1, ACS_HLINE, dw - 2);
+      mvwaddch(w, dy + dh - 3, dx, ACS_LTEE);
+      mvwaddch(w, dy + dh - 3, dx + dw - 1, ACS_RTEE);
+
+      wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      mvwprintw(w, dy + dh - 2, dx + 2, "↑↓:nav Enter:edit/add d:del Esc:done");
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    }
   }
 
   wrefresh(w);
@@ -2169,7 +2339,14 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         return MODAL_RESULT_NONE;
       }
       if (ch == '\t') {
-        m->sampler_custom_field = (m->sampler_custom_field + 1) % 6;
+        int max_fields;
+        if (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT)
+          max_fields = 2;
+        else if (m->sampler_custom_type == SAMPLER_TYPE_STRING)
+          max_fields = 3;
+        else
+          max_fields = 6;
+        m->sampler_custom_field = (m->sampler_custom_field + 1) % max_fields;
         char *bufs[] = {m->sampler_custom_name,  NULL,
                         m->sampler_custom_value, m->sampler_custom_min,
                         m->sampler_custom_max,   m->sampler_custom_step};
@@ -2179,12 +2356,23 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
           m->sampler_custom_cursor = 0;
         return MODAL_RESULT_NONE;
       }
-      if ((ch == KEY_LEFT || ch == KEY_RIGHT) && m->sampler_custom_field == 1) {
-        m->sampler_custom_is_int = !m->sampler_custom_is_int;
+      if ((ch == KEY_LEFT) && m->sampler_custom_field == 1) {
+        int t = (int)m->sampler_custom_type;
+        t = (t - 1 + 6) % 6;
+        m->sampler_custom_type = (SamplerValueType)t;
+        return MODAL_RESULT_NONE;
+      }
+      if ((ch == KEY_RIGHT) && m->sampler_custom_field == 1) {
+        int t = (int)m->sampler_custom_type;
+        t = (t + 1) % 6;
+        m->sampler_custom_type = (SamplerValueType)t;
         return MODAL_RESULT_NONE;
       }
       if (ch == '\n' || ch == '\r') {
-        if (m->sampler_custom_name[0] && m->sampler_custom_value[0]) {
+        bool is_list = (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT);
+        bool valid = m->sampler_custom_name[0] &&
+                     (is_list || m->sampler_custom_value[0]);
+        if (valid) {
           double val = atof(m->sampler_custom_value);
           double min_v =
               m->sampler_custom_min[0] ? atof(m->sampler_custom_min) : 0;
@@ -2192,13 +2380,25 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
               m->sampler_custom_max[0] ? atof(m->sampler_custom_max) : 100;
           double step =
               m->sampler_custom_step[0] ? atof(m->sampler_custom_step) : 0;
-          sampler_add_custom(s, m->sampler_custom_name, val,
-                             m->sampler_custom_is_int, min_v, max_v, step);
+          const char *str_val = (m->sampler_custom_type == SAMPLER_TYPE_STRING)
+                                    ? m->sampler_custom_value
+                                    : NULL;
+          sampler_add_custom(s, m->sampler_custom_name, m->sampler_custom_type,
+                             val, str_val, min_v, max_v, step);
           int base_count = 27;
           m->sampler_field_index = base_count + s->custom_count - 1;
           int visible = m->height - 6;
           if (m->sampler_field_index >= m->sampler_scroll + visible)
             m->sampler_scroll = m->sampler_field_index - visible + 1;
+          m->sampler_adding_custom = false;
+          if (is_list) {
+            m->sampler_editing_list = true;
+            m->sampler_list_index = 0;
+            m->sampler_list_scroll = 0;
+            m->sampler_list_input[0] = '\0';
+            m->sampler_list_input_cursor = 0;
+          }
+          return MODAL_RESULT_NONE;
         }
         m->sampler_adding_custom = false;
         return MODAL_RESULT_NONE;
@@ -2209,7 +2409,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       char *bufs[] = {m->sampler_custom_name,  NULL,
                       m->sampler_custom_value, m->sampler_custom_min,
                       m->sampler_custom_max,   m->sampler_custom_step};
-      int maxlens[] = {63, 0, 31, 31, 31, 31};
+      int maxlens[] = {63, 0, 255, 31, 31, 31};
       char *buf = bufs[m->sampler_custom_field];
       int maxlen = maxlens[m->sampler_custom_field];
       if (ch == KEY_BACKSPACE || ch == 127) {
@@ -2233,6 +2433,129 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         }
         return MODAL_RESULT_NONE;
       }
+      return MODAL_RESULT_NONE;
+    }
+
+    if (m->sampler_editing_list) {
+      int base_count = 27;
+      int idx = m->sampler_field_index;
+      if (idx >= base_count) {
+        CustomSampler *cs = &s->custom[idx - base_count];
+
+        if (ch == 27) {
+          m->sampler_editing_list = false;
+          m->sampler_list_input[0] = '\0';
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch == KEY_UP) {
+          if (m->sampler_list_input[0]) {
+            if (m->sampler_list_index < cs->list_count) {
+              if (cs->type == SAMPLER_TYPE_LIST_STRING) {
+                strncpy(cs->list_strings[m->sampler_list_index],
+                        m->sampler_list_input, 63);
+              } else {
+                cs->list_values[m->sampler_list_index] =
+                    atof(m->sampler_list_input);
+              }
+            }
+            m->sampler_list_input[0] = '\0';
+            m->sampler_list_input_cursor = 0;
+          }
+          if (m->sampler_list_index > 0)
+            m->sampler_list_index--;
+          if (m->sampler_list_index < m->sampler_list_scroll)
+            m->sampler_list_scroll = m->sampler_list_index;
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch == KEY_DOWN) {
+          if (m->sampler_list_input[0]) {
+            if (m->sampler_list_index < cs->list_count) {
+              if (cs->type == SAMPLER_TYPE_LIST_STRING) {
+                strncpy(cs->list_strings[m->sampler_list_index],
+                        m->sampler_list_input, 63);
+              } else {
+                cs->list_values[m->sampler_list_index] =
+                    atof(m->sampler_list_input);
+              }
+            }
+            m->sampler_list_input[0] = '\0';
+            m->sampler_list_input_cursor = 0;
+          }
+          if (m->sampler_list_index < cs->list_count)
+            m->sampler_list_index++;
+          int visible = 11;
+          if (m->sampler_list_index >= m->sampler_list_scroll + visible)
+            m->sampler_list_scroll = m->sampler_list_index - visible + 1;
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch == '\n' || ch == '\r') {
+          if (m->sampler_list_index == cs->list_count) {
+            if (cs->list_count < MAX_LIST_ITEMS) {
+              if (cs->type == SAMPLER_TYPE_LIST_STRING)
+                cs->list_strings[cs->list_count][0] = '\0';
+              else
+                cs->list_values[cs->list_count] = 0;
+              cs->list_count++;
+              m->sampler_list_input[0] = '\0';
+              m->sampler_list_input_cursor = 0;
+            }
+          } else if (m->sampler_list_input[0]) {
+            if (cs->type == SAMPLER_TYPE_LIST_STRING) {
+              strncpy(cs->list_strings[m->sampler_list_index],
+                      m->sampler_list_input, 63);
+            } else {
+              cs->list_values[m->sampler_list_index] =
+                  atof(m->sampler_list_input);
+            }
+            m->sampler_list_input[0] = '\0';
+            m->sampler_list_input_cursor = 0;
+          }
+          return MODAL_RESULT_NONE;
+        }
+
+        if ((ch == 'd' || ch == 'D') &&
+            m->sampler_list_index < cs->list_count) {
+          for (int i = m->sampler_list_index; i < cs->list_count - 1; i++) {
+            cs->list_values[i] = cs->list_values[i + 1];
+            strncpy(cs->list_strings[i], cs->list_strings[i + 1], 63);
+          }
+          cs->list_count--;
+          if (m->sampler_list_index >= cs->list_count && cs->list_count > 0)
+            m->sampler_list_index = cs->list_count - 1;
+          if (m->sampler_list_index < 0)
+            m->sampler_list_index = 0;
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch == KEY_BACKSPACE || ch == 127) {
+          if (m->sampler_list_input_cursor > 0) {
+            int len = (int)strlen(m->sampler_list_input);
+            memmove(&m->sampler_list_input[m->sampler_list_input_cursor - 1],
+                    &m->sampler_list_input[m->sampler_list_input_cursor],
+                    len - m->sampler_list_input_cursor + 1);
+            m->sampler_list_input_cursor--;
+          }
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch >= 32 && ch < 127 && m->sampler_list_index < cs->list_count) {
+          int len = (int)strlen(m->sampler_list_input);
+          if (len < 255) {
+            memmove(&m->sampler_list_input[m->sampler_list_input_cursor + 1],
+                    &m->sampler_list_input[m->sampler_list_input_cursor],
+                    len - m->sampler_list_input_cursor + 1);
+            m->sampler_list_input[m->sampler_list_input_cursor] = (char)ch;
+            m->sampler_list_input_cursor++;
+          }
+          return MODAL_RESULT_NONE;
+        }
+
+        return MODAL_RESULT_NONE;
+      }
+      m->sampler_editing_list = false;
       return MODAL_RESULT_NONE;
     }
 
@@ -2321,7 +2644,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       m->sampler_custom_min[0] = '\0';
       m->sampler_custom_max[0] = '\0';
       m->sampler_custom_step[0] = '\0';
-      m->sampler_custom_is_int = false;
+      m->sampler_custom_type = SAMPLER_TYPE_FLOAT;
       m->sampler_custom_cursor = 0;
       return MODAL_RESULT_NONE;
     }
@@ -2396,9 +2719,11 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
           *ivals[idx] -= (int)step;
       } else {
         CustomSampler *cs = &s->custom[idx - base_field_count];
-        cs->value -= cs->step;
-        if (cs->value < cs->min_val)
-          cs->value = cs->min_val;
+        if (cs->type != SAMPLER_TYPE_STRING) {
+          cs->value -= cs->step;
+          if (cs->value < cs->min_val)
+            cs->value = cs->min_val;
+        }
       }
       m->sampler_input[0] = '\0';
       return MODAL_RESULT_NONE;
@@ -2414,25 +2739,66 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
           *ivals[idx] += (int)step;
       } else {
         CustomSampler *cs = &s->custom[idx - base_field_count];
-        cs->value += cs->step;
-        if (cs->value > cs->max_val)
-          cs->value = cs->max_val;
+        if (cs->type != SAMPLER_TYPE_STRING) {
+          cs->value += cs->step;
+          if (cs->value > cs->max_val)
+            cs->value = cs->max_val;
+        }
       }
       m->sampler_input[0] = '\0';
       return MODAL_RESULT_NONE;
     }
 
     if (ch == '\n' || ch == '\r') {
+      int idx = m->sampler_field_index;
+      if (idx >= base_field_count) {
+        CustomSampler *cs = &s->custom[idx - base_field_count];
+        if (cs->type >= SAMPLER_TYPE_LIST_FLOAT && !m->sampler_input[0]) {
+          m->sampler_editing_list = true;
+          m->sampler_list_index = 0;
+          m->sampler_list_scroll = 0;
+          m->sampler_list_input[0] = '\0';
+          m->sampler_list_input_cursor = 0;
+          return MODAL_RESULT_NONE;
+        }
+      }
       if (m->sampler_input[0]) {
-        double val = atof(m->sampler_input);
-        int idx = m->sampler_field_index;
         if (idx < base_field_count) {
+          double val = atof(m->sampler_input);
           if (dvals[idx])
             *dvals[idx] = val;
           else if (ivals[idx])
             *ivals[idx] = (int)val;
         } else {
-          s->custom[idx - base_field_count].value = val;
+          CustomSampler *cs = &s->custom[idx - base_field_count];
+          if (cs->type == SAMPLER_TYPE_STRING) {
+            strncpy(cs->str_value, m->sampler_input,
+                    CUSTOM_SAMPLER_STR_LEN - 1);
+            cs->str_value[CUSTOM_SAMPLER_STR_LEN - 1] = '\0';
+          } else if (cs->type >= SAMPLER_TYPE_LIST_FLOAT) {
+            cs->list_count = 0;
+            char *copy = strdup(m->sampler_input);
+            char *tok = strtok(copy, ",");
+            while (tok && cs->list_count < MAX_LIST_ITEMS) {
+              while (*tok == ' ')
+                tok++;
+              if (cs->type == SAMPLER_TYPE_LIST_STRING) {
+                strncpy(cs->list_strings[cs->list_count], tok, 63);
+                cs->list_strings[cs->list_count][63] = '\0';
+                char *end = cs->list_strings[cs->list_count] +
+                            strlen(cs->list_strings[cs->list_count]) - 1;
+                while (end > cs->list_strings[cs->list_count] && *end == ' ')
+                  *end-- = '\0';
+              } else {
+                cs->list_values[cs->list_count] = atof(tok);
+              }
+              cs->list_count++;
+              tok = strtok(NULL, ",");
+            }
+            free(copy);
+          } else {
+            cs->value = atof(m->sampler_input);
+          }
         }
         m->sampler_input[0] = '\0';
         m->sampler_input_cursor = 0;
@@ -2450,9 +2816,22 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       return MODAL_RESULT_NONE;
     }
 
-    if ((ch >= '0' && ch <= '9') || ch == '.' || ch == '-') {
+    bool is_text_sampler = false;
+    int idx = m->sampler_field_index;
+    if (idx >= base_field_count && idx < total_fields) {
+      CustomSampler *cs = &s->custom[idx - base_field_count];
+      is_text_sampler = (cs->type == SAMPLER_TYPE_STRING ||
+                         cs->type >= SAMPLER_TYPE_LIST_FLOAT);
+    }
+
+    bool valid_char = (ch >= '0' && ch <= '9') || ch == '.' || ch == '-';
+    if (is_text_sampler)
+      valid_char = (ch >= 32 && ch < 127);
+
+    if (valid_char) {
       int len = (int)strlen(m->sampler_input);
-      if (len < (int)sizeof(m->sampler_input) - 1) {
+      int maxlen = is_text_sampler ? 255 : (int)sizeof(m->sampler_input) - 1;
+      if (len < maxlen) {
         memmove(&m->sampler_input[m->sampler_input_cursor + 1],
                 &m->sampler_input[m->sampler_input_cursor],
                 len - m->sampler_input_cursor + 1);
