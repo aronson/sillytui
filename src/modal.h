@@ -74,6 +74,11 @@ typedef struct {
   int sampler_scroll;
   char sampler_input[32];
   int sampler_input_cursor;
+  bool sampler_adding_custom;
+  int sampler_custom_field;
+  char sampler_custom_name[64];
+  char sampler_custom_value[32];
+  int sampler_custom_cursor;
 } Modal;
 
 typedef enum {

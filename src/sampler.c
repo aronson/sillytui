@@ -212,7 +212,66 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
       s->nsigma = parse_double(&p);
     else if (strcmp(key, "skew") == 0)
       s->skew = parse_double(&p);
-    else {
+    else if (strcmp(key, "custom") == 0) {
+      p = skip_ws(p);
+      if (*p == '[') {
+        p++;
+        while (*p && *p != ']') {
+          p = skip_ws(p);
+          if (*p == ',') {
+            p++;
+            continue;
+          }
+          if (*p == '{') {
+            p++;
+            char cname[CUSTOM_SAMPLER_NAME_LEN] = {0};
+            double cval = 0;
+            bool cint = false;
+            while (*p && *p != '}') {
+              p = skip_ws(p);
+              if (*p == ',') {
+                p++;
+                continue;
+              }
+              char ckey[32];
+              p = parse_string(p, ckey, sizeof(ckey));
+              if (!p)
+                break;
+              p = skip_ws(p);
+              if (*p == ':')
+                p++;
+              p = skip_ws(p);
+              if (strcmp(ckey, "name") == 0) {
+                p = parse_string(p, cname, sizeof(cname));
+              } else if (strcmp(ckey, "value") == 0) {
+                cval = parse_double(&p);
+              } else if (strcmp(ckey, "is_int") == 0) {
+                if (strncmp(p, "true", 4) == 0) {
+                  cint = true;
+                  p += 4;
+                } else if (strncmp(p, "false", 5) == 0) {
+                  cint = false;
+                  p += 5;
+                }
+              }
+            }
+            if (*p == '}')
+              p++;
+            if (cname[0] && s->custom_count < MAX_CUSTOM_SAMPLERS) {
+              strncpy(s->custom[s->custom_count].name, cname,
+                      CUSTOM_SAMPLER_NAME_LEN - 1);
+              s->custom[s->custom_count].value = cval;
+              s->custom[s->custom_count].is_int = cint;
+              s->custom_count++;
+            }
+          } else {
+            break;
+          }
+        }
+        if (*p == ']')
+          p++;
+      }
+    } else {
       while (*p && *p != ',' && *p != '}')
         p++;
     }
@@ -260,9 +319,44 @@ bool sampler_save(const SamplerSettings *s, ApiType api_type) {
   fprintf(f, "  \"xtc_threshold\": %.4g,\n", s->xtc_threshold);
   fprintf(f, "  \"xtc_probability\": %.4g,\n", s->xtc_probability);
   fprintf(f, "  \"nsigma\": %.4g,\n", s->nsigma);
-  fprintf(f, "  \"skew\": %.4g\n", s->skew);
+  fprintf(f, "  \"skew\": %.4g", s->skew);
+
+  if (s->custom_count > 0) {
+    fprintf(f, ",\n  \"custom\": [\n");
+    for (int i = 0; i < s->custom_count; i++) {
+      fprintf(f, "    {\"name\": \"%s\", \"value\": %.4g, \"is_int\": %s}%s\n",
+              s->custom[i].name, s->custom[i].value,
+              s->custom[i].is_int ? "true" : "false",
+              i < s->custom_count - 1 ? "," : "");
+    }
+    fprintf(f, "  ]\n");
+  } else {
+    fprintf(f, "\n");
+  }
   fprintf(f, "}\n");
 
   fclose(f);
+  return true;
+}
+
+bool sampler_add_custom(SamplerSettings *s, const char *name, double value,
+                        bool is_int) {
+  if (s->custom_count >= MAX_CUSTOM_SAMPLERS)
+    return false;
+  strncpy(s->custom[s->custom_count].name, name, CUSTOM_SAMPLER_NAME_LEN - 1);
+  s->custom[s->custom_count].name[CUSTOM_SAMPLER_NAME_LEN - 1] = '\0';
+  s->custom[s->custom_count].value = value;
+  s->custom[s->custom_count].is_int = is_int;
+  s->custom_count++;
+  return true;
+}
+
+bool sampler_remove_custom(SamplerSettings *s, int index) {
+  if (index < 0 || index >= s->custom_count)
+    return false;
+  for (int i = index; i < s->custom_count - 1; i++) {
+    s->custom[i] = s->custom[i + 1];
+  }
+  s->custom_count--;
   return true;
 }

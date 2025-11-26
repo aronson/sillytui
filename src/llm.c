@@ -896,6 +896,16 @@ static char *build_request_body(const ModelConfig *config,
       if (s->skew != 0.0)
         pos += snprintf(body + pos, cap - pos, ",\"skew\":%.4g", s->skew);
     }
+
+    for (int i = 0; i < s->custom_count; i++) {
+      if (s->custom[i].is_int) {
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":%d", s->custom[i].name,
+                        (int)s->custom[i].value);
+      } else {
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":%.4g",
+                        s->custom[i].name, s->custom[i].value);
+      }
+    }
   }
 
   pos += snprintf(body + pos, cap - pos,
