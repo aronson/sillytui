@@ -275,6 +275,10 @@ void modal_open_sampler_settings(Modal *m, ApiType api_type) {
   m->sampler_custom_field = 0;
   m->sampler_custom_name[0] = '\0';
   m->sampler_custom_value[0] = '\0';
+  m->sampler_custom_min[0] = '\0';
+  m->sampler_custom_max[0] = '\0';
+  m->sampler_custom_step[0] = '\0';
+  m->sampler_custom_is_int = false;
   m->sampler_custom_cursor = 0;
   sampler_load(&m->sampler, api_type);
   create_window(m, 22, 46);
@@ -1200,7 +1204,34 @@ static void draw_sampler_settings(Modal *m) {
       else
         snprintf(val_str, sizeof(val_str), "%.3g", cs->value);
 
-      int val_x = 33;
+      double val_normalized = 0.0;
+      if (cs->max_val > cs->min_val)
+        val_normalized =
+            (cs->value - cs->min_val) / (cs->max_val - cs->min_val);
+      if (val_normalized < 0.0)
+        val_normalized = 0.0;
+      if (val_normalized > 1.0)
+        val_normalized = 1.0;
+
+      int bar_width = 12;
+      int bar_x = 18;
+      int filled = (int)(val_normalized * bar_width);
+
+      mvwaddstr(w, y, bar_x, "│");
+      for (int b = 0; b < bar_width; b++) {
+        if (b < filled) {
+          wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+          waddstr(w, "━");
+          wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+        } else {
+          wattron(w, A_DIM);
+          waddstr(w, "─");
+          wattroff(w, A_DIM);
+        }
+      }
+      waddstr(w, "│");
+
+      int val_x = bar_x + bar_width + 3;
       if (is_selected && m->sampler_input[0]) {
         wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
         mvwprintw(w, y, val_x, "%-8s", m->sampler_input);
@@ -1254,7 +1285,7 @@ static void draw_sampler_settings(Modal *m) {
   wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
 
   if (m->sampler_adding_custom) {
-    int dw = 36, dh = 8;
+    int dw = 40, dh = 12;
     int dx = (m->width - dw) / 2;
     int dy = (m->height - dh) / 2;
 
@@ -1282,19 +1313,56 @@ static void draw_sampler_settings(Modal *m) {
     mvwprintw(w, dy + 2, dx + 2, "Name:");
     if (m->sampler_custom_field == 0)
       wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 2, dx + 8, "%-24.24s", m->sampler_custom_name);
+    mvwprintw(w, dy + 2, dx + 8, "%-20.20s", m->sampler_custom_name);
     if (m->sampler_custom_field == 0)
       wattroff(w, A_REVERSE);
 
-    mvwprintw(w, dy + 4, dx + 2, "Value:");
-    if (m->sampler_custom_field == 1)
+    mvwprintw(w, dy + 3, dx + 2, "Type:");
+    if (m->sampler_custom_field == 1) {
       wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 4, dx + 9, "%-12.12s", m->sampler_custom_value);
-    if (m->sampler_custom_field == 1)
+    }
+    mvwprintw(w, dy + 3, dx + 8,
+              m->sampler_custom_is_int ? "[int]  float " : " int  [float]");
+    if (m->sampler_custom_field == 1) {
+      wattroff(w, A_REVERSE);
+    }
+
+    mvwprintw(w, dy + 4, dx + 2, "Value:");
+    if (m->sampler_custom_field == 2)
+      wattron(w, A_REVERSE);
+    mvwprintw(w, dy + 4, dx + 9, "%-8.8s", m->sampler_custom_value);
+    if (m->sampler_custom_field == 2)
+      wattroff(w, A_REVERSE);
+
+    mvwprintw(w, dy + 5, dx + 2, "Min:");
+    if (m->sampler_custom_field == 3)
+      wattron(w, A_REVERSE);
+    mvwprintw(w, dy + 5, dx + 7, "%-8.8s",
+              m->sampler_custom_min[0] ? m->sampler_custom_min : "0");
+    if (m->sampler_custom_field == 3)
+      wattroff(w, A_REVERSE);
+
+    mvwprintw(w, dy + 5, dx + 18, "Max:");
+    if (m->sampler_custom_field == 4)
+      wattron(w, A_REVERSE);
+    mvwprintw(w, dy + 5, dx + 23, "%-8.8s",
+              m->sampler_custom_max[0] ? m->sampler_custom_max : "100");
+    if (m->sampler_custom_field == 4)
+      wattroff(w, A_REVERSE);
+
+    mvwprintw(w, dy + 6, dx + 2, "Step:");
+    if (m->sampler_custom_field == 5)
+      wattron(w, A_REVERSE);
+    mvwprintw(w, dy + 6, dx + 8, "%-8.8s",
+              m->sampler_custom_step[0]
+                  ? m->sampler_custom_step
+                  : (m->sampler_custom_is_int ? "1" : "0.1"));
+    if (m->sampler_custom_field == 5)
       wattroff(w, A_REVERSE);
 
     wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
-    mvwprintw(w, dy + 6, dx + 2, "Tab:field Enter:add Esc:cancel");
+    mvwprintw(w, dy + 8, dx + 2, "Tab:next ←→:type Enter:add");
+    mvwprintw(w, dy + 9, dx + 2, "Esc:cancel");
     wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
   }
 
@@ -2101,17 +2169,31 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         return MODAL_RESULT_NONE;
       }
       if (ch == '\t') {
-        m->sampler_custom_field = 1 - m->sampler_custom_field;
-        m->sampler_custom_cursor = (m->sampler_custom_field == 0)
-                                       ? (int)strlen(m->sampler_custom_name)
-                                       : (int)strlen(m->sampler_custom_value);
+        m->sampler_custom_field = (m->sampler_custom_field + 1) % 6;
+        char *bufs[] = {m->sampler_custom_name,  NULL,
+                        m->sampler_custom_value, m->sampler_custom_min,
+                        m->sampler_custom_max,   m->sampler_custom_step};
+        if (bufs[m->sampler_custom_field])
+          m->sampler_custom_cursor = (int)strlen(bufs[m->sampler_custom_field]);
+        else
+          m->sampler_custom_cursor = 0;
+        return MODAL_RESULT_NONE;
+      }
+      if ((ch == KEY_LEFT || ch == KEY_RIGHT) && m->sampler_custom_field == 1) {
+        m->sampler_custom_is_int = !m->sampler_custom_is_int;
         return MODAL_RESULT_NONE;
       }
       if (ch == '\n' || ch == '\r') {
         if (m->sampler_custom_name[0] && m->sampler_custom_value[0]) {
           double val = atof(m->sampler_custom_value);
-          bool is_int = (strchr(m->sampler_custom_value, '.') == NULL);
-          sampler_add_custom(s, m->sampler_custom_name, val, is_int);
+          double min_v =
+              m->sampler_custom_min[0] ? atof(m->sampler_custom_min) : 0;
+          double max_v =
+              m->sampler_custom_max[0] ? atof(m->sampler_custom_max) : 100;
+          double step =
+              m->sampler_custom_step[0] ? atof(m->sampler_custom_step) : 0;
+          sampler_add_custom(s, m->sampler_custom_name, val,
+                             m->sampler_custom_is_int, min_v, max_v, step);
           int base_count = 27;
           m->sampler_field_index = base_count + s->custom_count - 1;
           int visible = m->height - 6;
@@ -2121,9 +2203,16 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         m->sampler_adding_custom = false;
         return MODAL_RESULT_NONE;
       }
+      if (m->sampler_custom_field == 1) {
+        return MODAL_RESULT_NONE;
+      }
+      char *bufs[] = {m->sampler_custom_name,  NULL,
+                      m->sampler_custom_value, m->sampler_custom_min,
+                      m->sampler_custom_max,   m->sampler_custom_step};
+      int maxlens[] = {63, 0, 31, 31, 31, 31};
+      char *buf = bufs[m->sampler_custom_field];
+      int maxlen = maxlens[m->sampler_custom_field];
       if (ch == KEY_BACKSPACE || ch == 127) {
-        char *buf = (m->sampler_custom_field == 0) ? m->sampler_custom_name
-                                                   : m->sampler_custom_value;
         int len = (int)strlen(buf);
         if (m->sampler_custom_cursor > 0 && len > 0) {
           memmove(&buf[m->sampler_custom_cursor - 1],
@@ -2134,9 +2223,6 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         return MODAL_RESULT_NONE;
       }
       if (ch >= 32 && ch < 127) {
-        char *buf = (m->sampler_custom_field == 0) ? m->sampler_custom_name
-                                                   : m->sampler_custom_value;
-        int maxlen = (m->sampler_custom_field == 0) ? 63 : 31;
         int len = (int)strlen(buf);
         if (len < maxlen) {
           memmove(&buf[m->sampler_custom_cursor + 1],
@@ -2232,6 +2318,10 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       m->sampler_custom_field = 0;
       m->sampler_custom_name[0] = '\0';
       m->sampler_custom_value[0] = '\0';
+      m->sampler_custom_min[0] = '\0';
+      m->sampler_custom_max[0] = '\0';
+      m->sampler_custom_step[0] = '\0';
+      m->sampler_custom_is_int = false;
       m->sampler_custom_cursor = 0;
       return MODAL_RESULT_NONE;
     }
@@ -2305,7 +2395,10 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         else if (ivals[idx])
           *ivals[idx] -= (int)step;
       } else {
-        s->custom[idx - base_field_count].value -= 0.1;
+        CustomSampler *cs = &s->custom[idx - base_field_count];
+        cs->value -= cs->step;
+        if (cs->value < cs->min_val)
+          cs->value = cs->min_val;
       }
       m->sampler_input[0] = '\0';
       return MODAL_RESULT_NONE;
@@ -2320,7 +2413,10 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         else if (ivals[idx])
           *ivals[idx] += (int)step;
       } else {
-        s->custom[idx - base_field_count].value += 0.1;
+        CustomSampler *cs = &s->custom[idx - base_field_count];
+        cs->value += cs->step;
+        if (cs->value > cs->max_val)
+          cs->value = cs->max_val;
       }
       m->sampler_input[0] = '\0';
       return MODAL_RESULT_NONE;

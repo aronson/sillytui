@@ -11,6 +11,9 @@ typedef struct {
   char name[CUSTOM_SAMPLER_NAME_LEN];
   double value;
   bool is_int;
+  double min_val;
+  double max_val;
+  double step;
 } CustomSampler;
 
 typedef struct {
@@ -55,7 +58,8 @@ void sampler_init_defaults(SamplerSettings *s);
 bool sampler_load(SamplerSettings *s, ApiType api_type);
 bool sampler_save(const SamplerSettings *s, ApiType api_type);
 bool sampler_add_custom(SamplerSettings *s, const char *name, double value,
-                        bool is_int);
+                        bool is_int, double min_val, double max_val,
+                        double step);
 bool sampler_remove_custom(SamplerSettings *s, int index);
 
 #endif

@@ -78,6 +78,10 @@ typedef struct {
   int sampler_custom_field;
   char sampler_custom_name[64];
   char sampler_custom_value[32];
+  char sampler_custom_min[32];
+  char sampler_custom_max[32];
+  char sampler_custom_step[32];
+  bool sampler_custom_is_int;
   int sampler_custom_cursor;
 } Modal;
 

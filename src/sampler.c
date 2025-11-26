@@ -225,7 +225,7 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
           if (*p == '{') {
             p++;
             char cname[CUSTOM_SAMPLER_NAME_LEN] = {0};
-            double cval = 0;
+            double cval = 0, cmin = 0, cmax = 100, cstep = 0.1;
             bool cint = false;
             while (*p && *p != '}') {
               p = skip_ws(p);
@@ -253,15 +253,24 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
                   cint = false;
                   p += 5;
                 }
+              } else if (strcmp(ckey, "min") == 0) {
+                cmin = parse_double(&p);
+              } else if (strcmp(ckey, "max") == 0) {
+                cmax = parse_double(&p);
+              } else if (strcmp(ckey, "step") == 0) {
+                cstep = parse_double(&p);
               }
             }
             if (*p == '}')
               p++;
             if (cname[0] && s->custom_count < MAX_CUSTOM_SAMPLERS) {
-              strncpy(s->custom[s->custom_count].name, cname,
-                      CUSTOM_SAMPLER_NAME_LEN - 1);
-              s->custom[s->custom_count].value = cval;
-              s->custom[s->custom_count].is_int = cint;
+              CustomSampler *cs = &s->custom[s->custom_count];
+              strncpy(cs->name, cname, CUSTOM_SAMPLER_NAME_LEN - 1);
+              cs->value = cval;
+              cs->is_int = cint;
+              cs->min_val = cmin;
+              cs->max_val = cmax;
+              cs->step = cstep > 0 ? cstep : (cint ? 1.0 : 0.1);
               s->custom_count++;
             }
           } else {
@@ -324,10 +333,12 @@ bool sampler_save(const SamplerSettings *s, ApiType api_type) {
   if (s->custom_count > 0) {
     fprintf(f, ",\n  \"custom\": [\n");
     for (int i = 0; i < s->custom_count; i++) {
-      fprintf(f, "    {\"name\": \"%s\", \"value\": %.4g, \"is_int\": %s}%s\n",
-              s->custom[i].name, s->custom[i].value,
-              s->custom[i].is_int ? "true" : "false",
-              i < s->custom_count - 1 ? "," : "");
+      const CustomSampler *cs = &s->custom[i];
+      fprintf(f,
+              "    {\"name\": \"%s\", \"value\": %.4g, \"is_int\": %s, "
+              "\"min\": %.4g, \"max\": %.4g, \"step\": %.4g}%s\n",
+              cs->name, cs->value, cs->is_int ? "true" : "false", cs->min_val,
+              cs->max_val, cs->step, i < s->custom_count - 1 ? "," : "");
     }
     fprintf(f, "  ]\n");
   } else {
@@ -340,13 +351,18 @@ bool sampler_save(const SamplerSettings *s, ApiType api_type) {
 }
 
 bool sampler_add_custom(SamplerSettings *s, const char *name, double value,
-                        bool is_int) {
+                        bool is_int, double min_val, double max_val,
+                        double step) {
   if (s->custom_count >= MAX_CUSTOM_SAMPLERS)
     return false;
-  strncpy(s->custom[s->custom_count].name, name, CUSTOM_SAMPLER_NAME_LEN - 1);
-  s->custom[s->custom_count].name[CUSTOM_SAMPLER_NAME_LEN - 1] = '\0';
-  s->custom[s->custom_count].value = value;
-  s->custom[s->custom_count].is_int = is_int;
+  CustomSampler *cs = &s->custom[s->custom_count];
+  strncpy(cs->name, name, CUSTOM_SAMPLER_NAME_LEN - 1);
+  cs->name[CUSTOM_SAMPLER_NAME_LEN - 1] = '\0';
+  cs->value = value;
+  cs->is_int = is_int;
+  cs->min_val = min_val;
+  cs->max_val = max_val;
+  cs->step = step > 0 ? step : (is_int ? 1.0 : 0.1);
   s->custom_count++;
   return true;
 }
