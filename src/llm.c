@@ -907,6 +907,9 @@ static char *build_request_body(const ModelConfig *config,
       } else if (cs->type == SAMPLER_TYPE_INT) {
         pos += snprintf(body + pos, cap - pos, ",\"%s\":%d", cs->name,
                         (int)cs->value);
+      } else if (cs->type == SAMPLER_TYPE_BOOL) {
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":%s", cs->name,
+                        cs->value != 0 ? "true" : "false");
       } else if (cs->type == SAMPLER_TYPE_LIST_FLOAT ||
                  cs->type == SAMPLER_TYPE_LIST_INT) {
         pos += snprintf(body + pos, cap - pos, ",\"%s\":[", cs->name);
@@ -931,6 +934,23 @@ static char *build_request_body(const ModelConfig *config,
             pos += snprintf(body + pos, cap - pos, ",");
         }
         pos += snprintf(body + pos, cap - pos, "]");
+      } else if (cs->type == SAMPLER_TYPE_DICT) {
+        pos += snprintf(body + pos, cap - pos, ",\"%s\":{", cs->name);
+        for (int j = 0; j < cs->dict_count; j++) {
+          const DictEntry *de = &cs->dict_entries[j];
+          if (de->is_string) {
+            char *escaped = escape_json_string(de->str_val);
+            pos += snprintf(body + pos, cap - pos, "\"%s\":\"%s\"", de->key,
+                            escaped ? escaped : de->str_val);
+            free(escaped);
+          } else {
+            pos += snprintf(body + pos, cap - pos, "\"%s\":%.4g", de->key,
+                            de->num_val);
+          }
+          if (j < cs->dict_count - 1)
+            pos += snprintf(body + pos, cap - pos, ",");
+        }
+        pos += snprintf(body + pos, cap - pos, "}");
       } else {
         pos += snprintf(body + pos, cap - pos, ",\"%s\":%.4g", cs->name,
                         cs->value);

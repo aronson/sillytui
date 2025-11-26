@@ -88,6 +88,14 @@ typedef struct {
   int sampler_list_scroll;
   char sampler_list_input[256];
   int sampler_list_input_cursor;
+  bool sampler_editing_dict;
+  int sampler_dict_index;
+  int sampler_dict_scroll;
+  int sampler_dict_field;
+  char sampler_dict_key[32];
+  char sampler_dict_val[64];
+  int sampler_dict_cursor;
+  bool sampler_dict_val_is_str;
 } Modal;
 
 typedef enum {

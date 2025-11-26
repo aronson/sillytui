@@ -1205,6 +1205,9 @@ static void draw_sampler_settings(Modal *m) {
         snprintf(val_str, sizeof(val_str), "%.20s", cs->str_value);
       } else if (cs->type == SAMPLER_TYPE_INT) {
         snprintf(val_str, sizeof(val_str), "%d", (int)cs->value);
+      } else if (cs->type == SAMPLER_TYPE_BOOL) {
+        snprintf(val_str, sizeof(val_str), "%s",
+                 cs->value != 0 ? "true" : "false");
       } else if (cs->type == SAMPLER_TYPE_LIST_FLOAT ||
                  cs->type == SAMPLER_TYPE_LIST_INT ||
                  cs->type == SAMPLER_TYPE_LIST_STRING) {
@@ -1220,6 +1223,15 @@ static void draw_sampler_settings(Modal *m) {
         } else {
           snprintf(val_str, sizeof(val_str), "[%d items]", cs->list_count);
         }
+      } else if (cs->type == SAMPLER_TYPE_DICT) {
+        if (cs->dict_count == 0) {
+          snprintf(val_str, sizeof(val_str), "(empty)");
+        } else if (cs->dict_count == 1) {
+          snprintf(val_str, sizeof(val_str), "{%s:...}",
+                   cs->dict_entries[0].key);
+        } else {
+          snprintf(val_str, sizeof(val_str), "{%d keys}", cs->dict_count);
+        }
       } else {
         snprintf(val_str, sizeof(val_str), "%.3g", cs->value);
       }
@@ -1231,6 +1243,16 @@ static void draw_sampler_settings(Modal *m) {
         mvwprintw(w, y, tag_x, "[str]");
         wattroff(w, A_DIM);
         val_x = tag_x + 6;
+      } else if (cs->type == SAMPLER_TYPE_BOOL) {
+        wattron(w, A_DIM);
+        mvwprintw(w, y, tag_x, "[?]");
+        wattroff(w, A_DIM);
+        val_x = tag_x + 4;
+      } else if (cs->type == SAMPLER_TYPE_DICT) {
+        wattron(w, A_DIM);
+        mvwprintw(w, y, tag_x, "{}");
+        wattroff(w, A_DIM);
+        val_x = tag_x + 3;
       } else if (cs->type >= SAMPLER_TYPE_LIST_FLOAT) {
         const char *tag = cs->type == SAMPLER_TYPE_LIST_STRING ? "[s]"
                           : cs->type == SAMPLER_TYPE_LIST_INT  ? "[i]"
@@ -1322,7 +1344,7 @@ static void draw_sampler_settings(Modal *m) {
   wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
 
   if (m->sampler_adding_custom) {
-    int dw = 52, dh = 12;
+    int dw = 56, dh = 16;
     int dx = (m->width - dw) / 2;
     int dy = (m->height - dh) / 2;
 
@@ -1343,76 +1365,118 @@ static void draw_sampler_settings(Modal *m) {
     mvwaddch(w, dy + dh - 1, dx + dw - 1, ACS_LRCORNER);
     wattroff(w, COLOR_PAIR(COLOR_PAIR_BORDER));
 
-    wattron(w, A_BOLD);
-    mvwprintw(w, dy, dx + (dw - 14) / 2, " Add Sampler ");
-    wattroff(w, A_BOLD);
+    wattron(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_USER));
+    mvwprintw(w, dy, dx + (dw - 16) / 2, " Add Sampler ");
+    wattroff(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_USER));
 
-    mvwprintw(w, dy + 2, dx + 2, "Name:");
+    wattron(w, A_DIM);
+    mvwprintw(w, dy + 2, dx + 2, "Name");
+    wattroff(w, A_DIM);
     if (m->sampler_custom_field == 0)
       wattron(w, A_REVERSE);
-    mvwprintw(w, dy + 2, dx + 8, "%-32.32s", m->sampler_custom_name);
+    mvwprintw(w, dy + 3, dx + 2, " %-48.48s ", m->sampler_custom_name);
     if (m->sampler_custom_field == 0)
       wattroff(w, A_REVERSE);
 
-    mvwprintw(w, dy + 3, dx + 2, "Type:");
-    const char *types[] = {"float", "int", "str", "[f]", "[i]", "[s]"};
+    wattron(w, A_DIM);
+    mvwprintw(w, dy + 5, dx + 2, "Type");
+    wattroff(w, A_DIM);
+    const char *types[] = {"float", "int", "str", "bool",
+                           "[f]",   "[i]", "[s]", "{}"};
     int type_idx = (int)m->sampler_custom_type;
-    int type_pos[] = {0, 7, 12, 17, 22, 27};
+    int type_pos[] = {0, 6, 10, 14, 19, 23, 27, 31};
     if (m->sampler_custom_field == 1)
       wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
-    mvwprintw(w, dy + 3, dx + 7, "←");
+    mvwprintw(w, dy + 6, dx + 2, "←");
     wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
-    for (int t = 0; t < 6; t++) {
-      if (t == type_idx)
-        wattron(w, A_BOLD | A_REVERSE);
-      mvwprintw(w, dy + 3, dx + 9 + type_pos[t], "%s", types[t]);
-      if (t == type_idx)
-        wattroff(w, A_BOLD | A_REVERSE);
+    for (int t = 0; t < 8; t++) {
+      if (t == type_idx) {
+        wattron(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_SWIPE));
+      }
+      mvwprintw(w, dy + 6, dx + 4 + type_pos[t], "%s", types[t]);
+      if (t == type_idx) {
+        wattroff(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_SWIPE));
+      }
     }
     if (m->sampler_custom_field == 1)
       wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
-    mvwprintw(w, dy + 3, dx + 40, "→");
+    mvwprintw(w, dy + 6, dx + 38, "→");
     wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
 
-    if (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT) {
+    if (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT &&
+        m->sampler_custom_type <= SAMPLER_TYPE_LIST_STRING) {
       wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
-      mvwprintw(w, dy + 4, dx + 2, "(List items added after creation)");
+      mvwprintw(w, dy + 8, dx + 2, "(List items added after creation)");
       wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    } else if (m->sampler_custom_type == SAMPLER_TYPE_DICT) {
+      wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      mvwprintw(w, dy + 8, dx + 2, "(Dict entries added after creation)");
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    } else if (m->sampler_custom_type == SAMPLER_TYPE_BOOL) {
+      wattron(w, A_DIM);
+      mvwprintw(w, dy + 8, dx + 2, "Value");
+      wattroff(w, A_DIM);
+      bool bval = (m->sampler_custom_value[0] == 't' ||
+                   m->sampler_custom_value[0] == 'T' ||
+                   m->sampler_custom_value[0] == '1');
+      if (m->sampler_custom_field == 2)
+        wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+      mvwprintw(w, dy + 9, dx + 2, "←");
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+      if (bval)
+        wattron(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_SWIPE));
+      mvwprintw(w, dy + 9, dx + 4, "true");
+      if (bval)
+        wattroff(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_SWIPE));
+      mvwaddstr(w, dy + 9, dx + 9, " / ");
+      if (!bval)
+        wattron(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_SWIPE));
+      mvwprintw(w, dy + 9, dx + 12, "false");
+      if (!bval)
+        wattroff(w, A_BOLD | COLOR_PAIR(COLOR_PAIR_SWIPE));
+      if (m->sampler_custom_field == 2)
+        wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
+      mvwprintw(w, dy + 9, dx + 18, "→");
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE));
     } else {
-      mvwprintw(w, dy + 4, dx + 2, "Value:");
+      wattron(w, A_DIM);
+      mvwprintw(w, dy + 8, dx + 2, "Value");
+      wattroff(w, A_DIM);
       if (m->sampler_custom_field == 2)
         wattron(w, A_REVERSE);
       if (m->sampler_custom_type == SAMPLER_TYPE_STRING) {
-        mvwprintw(w, dy + 4, dx + 9, "%-38.38s", m->sampler_custom_value);
+        mvwprintw(w, dy + 9, dx + 2, " %-48.48s ", m->sampler_custom_value);
       } else {
-        mvwprintw(w, dy + 4, dx + 9, "%-10.10s", m->sampler_custom_value);
+        mvwprintw(w, dy + 9, dx + 2, " %-10.10s ", m->sampler_custom_value);
       }
       if (m->sampler_custom_field == 2)
         wattroff(w, A_REVERSE);
     }
 
     if (m->sampler_custom_type < SAMPLER_TYPE_STRING) {
-      mvwprintw(w, dy + 5, dx + 2, "Min:");
+      wattron(w, A_DIM);
+      mvwprintw(w, dy + 9, dx + 18, "Min");
+      mvwprintw(w, dy + 9, dx + 30, "Max");
+      mvwprintw(w, dy + 9, dx + 42, "Step");
+      wattroff(w, A_DIM);
       if (m->sampler_custom_field == 3)
         wattron(w, A_REVERSE);
-      mvwprintw(w, dy + 5, dx + 7, "%-8.8s",
+      mvwprintw(w, dy + 10, dx + 18, "%-8.8s",
                 m->sampler_custom_min[0] ? m->sampler_custom_min : "0");
       if (m->sampler_custom_field == 3)
         wattroff(w, A_REVERSE);
 
-      mvwprintw(w, dy + 5, dx + 18, "Max:");
       if (m->sampler_custom_field == 4)
         wattron(w, A_REVERSE);
-      mvwprintw(w, dy + 5, dx + 23, "%-8.8s",
+      mvwprintw(w, dy + 10, dx + 30, "%-8.8s",
                 m->sampler_custom_max[0] ? m->sampler_custom_max : "100");
       if (m->sampler_custom_field == 4)
         wattroff(w, A_REVERSE);
 
-      mvwprintw(w, dy + 6, dx + 2, "Step:");
       if (m->sampler_custom_field == 5)
         wattron(w, A_REVERSE);
       mvwprintw(
-          w, dy + 6, dx + 8, "%-8.8s",
+          w, dy + 10, dx + 42, "%-8.8s",
           m->sampler_custom_step[0]
               ? m->sampler_custom_step
               : (m->sampler_custom_type == SAMPLER_TYPE_INT ? "1" : "0.1"));
@@ -1420,10 +1484,38 @@ static void draw_sampler_settings(Modal *m) {
         wattroff(w, A_REVERSE);
     }
 
-    wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
-    mvwprintw(w, dy + 8, dx + 2, "Tab:next ←→:type Enter:add");
-    mvwprintw(w, dy + 9, dx + 2, "Esc:cancel");
-    wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    mvwhline(w, dy + dh - 4, dx + 1, ACS_HLINE, dw - 2);
+    mvwaddch(w, dy + dh - 4, dx, ACS_LTEE);
+    mvwaddch(w, dy + dh - 4, dx + dw - 1, ACS_RTEE);
+
+    const char *type_desc[] = {"Decimal number (e.g. 0.95, 1.5)",
+                               "Whole number (e.g. 40, 100)",
+                               "Text string (e.g. \"hello\")",
+                               "True or false toggle",
+                               "List of decimal numbers",
+                               "List of whole numbers",
+                               "List of text strings",
+                               "Key-value dictionary"};
+    wattron(w, COLOR_PAIR(COLOR_PAIR_HINT));
+    mvwprintw(w, dy + dh - 3, dx + 2, "%s", type_desc[type_idx]);
+    wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT));
+
+    wattron(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 2, "Tab");
+    wattroff(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 6, "next");
+    wattron(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 13, "←→");
+    wattroff(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 16, "type");
+    wattron(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 23, "Enter");
+    wattroff(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 29, "add");
+    wattron(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 35, "Esc");
+    wattroff(w, A_DIM);
+    mvwprintw(w, dy + dh - 2, dx + 39, "cancel");
   }
 
   if (m->sampler_editing_list) {
@@ -1532,6 +1624,118 @@ static void draw_sampler_settings(Modal *m) {
 
       wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
       mvwprintw(w, dy + dh - 2, dx + 2, "↑↓:nav Enter:edit/add d:del Esc:done");
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    }
+  }
+
+  if (m->sampler_editing_dict) {
+    int base_count = 27;
+    int idx = m->sampler_field_index;
+    if (idx >= base_count) {
+      CustomSampler *cs = &s->custom[idx - base_count];
+
+      int dw = 54, dh = 14;
+      int dx = (m->width - dw) / 2;
+      int dy = (m->height - dh) / 2;
+
+      for (int yy = dy; yy < dy + dh; yy++) {
+        mvwhline(w, yy, dx, ' ', dw);
+      }
+
+      wattron(w, COLOR_PAIR(COLOR_PAIR_BORDER));
+      for (int yy = dy; yy < dy + dh; yy++) {
+        mvwaddstr(w, yy, dx, "│");
+        mvwaddstr(w, yy, dx + dw - 1, "│");
+      }
+      mvwhline(w, dy, dx + 1, ACS_HLINE, dw - 2);
+      mvwhline(w, dy + dh - 1, dx + 1, ACS_HLINE, dw - 2);
+      mvwaddch(w, dy, dx, ACS_ULCORNER);
+      mvwaddch(w, dy, dx + dw - 1, ACS_URCORNER);
+      mvwaddch(w, dy + dh - 1, dx, ACS_LLCORNER);
+      mvwaddch(w, dy + dh - 1, dx + dw - 1, ACS_LRCORNER);
+      wattroff(w, COLOR_PAIR(COLOR_PAIR_BORDER));
+
+      char title[64];
+      snprintf(title, sizeof(title), " %s (%d keys) ", cs->name,
+               cs->dict_count);
+      wattron(w, A_BOLD);
+      mvwprintw(w, dy, dx + (dw - (int)strlen(title)) / 2, "%s", title);
+      wattroff(w, A_BOLD);
+
+      int visible = dh - 5;
+      int start = m->sampler_dict_scroll;
+      if (start > cs->dict_count - visible)
+        start = cs->dict_count - visible;
+      if (start < 0)
+        start = 0;
+
+      for (int i = 0; i < visible; i++) {
+        int di = start + i;
+        int row = dy + 2 + i;
+
+        if (di > cs->dict_count)
+          continue;
+
+        if (di == cs->dict_count) {
+          if (m->sampler_dict_index == di) {
+            wattron(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
+            mvwprintw(w, row, dx + 2, "▸ + Add new entry");
+            wattroff(w, COLOR_PAIR(COLOR_PAIR_SWIPE) | A_BOLD);
+          }
+          continue;
+        }
+
+        bool is_sel = (di == m->sampler_dict_index);
+        DictEntry *de = &cs->dict_entries[di];
+
+        if (is_sel) {
+          wattron(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+          mvwaddstr(w, row, dx + 2, "▸");
+          wattroff(w, COLOR_PAIR(COLOR_PAIR_USER) | A_BOLD);
+        } else {
+          mvwaddstr(w, row, dx + 2, " ");
+        }
+
+        if (is_sel)
+          wattron(w, COLOR_PAIR(COLOR_PAIR_USER));
+        mvwprintw(w, row, dx + 4, "%-14.14s", de->key);
+        if (is_sel)
+          wattroff(w, COLOR_PAIR(COLOR_PAIR_USER));
+
+        wattron(w, A_DIM);
+        mvwaddstr(w, row, dx + 19, ":");
+        wattroff(w, A_DIM);
+
+        char val_disp[32];
+        if (de->is_string)
+          snprintf(val_disp, sizeof(val_disp), "\"%s\"", de->str_val);
+        else
+          snprintf(val_disp, sizeof(val_disp), "%.6g", de->num_val);
+
+        if (is_sel)
+          wattron(w, COLOR_PAIR(COLOR_PAIR_USER));
+        mvwprintw(w, row, dx + 21, "%-28.28s", val_disp);
+        if (is_sel)
+          wattroff(w, COLOR_PAIR(COLOR_PAIR_USER));
+      }
+
+      if (start > 0) {
+        wattron(w, COLOR_PAIR(COLOR_PAIR_HINT));
+        mvwaddstr(w, dy + 2, dx + dw - 2, "▲");
+        wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT));
+      }
+      if (start + visible < cs->dict_count + 1) {
+        wattron(w, COLOR_PAIR(COLOR_PAIR_HINT));
+        mvwaddstr(w, dy + dh - 4, dx + dw - 2, "▼");
+        wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT));
+      }
+
+      mvwhline(w, dy + dh - 3, dx + 1, ACS_HLINE, dw - 2);
+      mvwaddch(w, dy + dh - 3, dx, ACS_LTEE);
+      mvwaddch(w, dy + dh - 3, dx + dw - 1, ACS_RTEE);
+
+      wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      mvwprintw(w, dy + dh - 2, dx + 2, "↑↓:nav Enter:add d:del Esc:done");
       wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
     }
   }
@@ -2340,9 +2544,11 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       }
       if (ch == '\t') {
         int max_fields;
-        if (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT)
+        if (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT ||
+            m->sampler_custom_type == SAMPLER_TYPE_DICT)
           max_fields = 2;
-        else if (m->sampler_custom_type == SAMPLER_TYPE_STRING)
+        else if (m->sampler_custom_type == SAMPLER_TYPE_STRING ||
+                 m->sampler_custom_type == SAMPLER_TYPE_BOOL)
           max_fields = 3;
         else
           max_fields = 6;
@@ -2358,22 +2564,43 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       }
       if ((ch == KEY_LEFT) && m->sampler_custom_field == 1) {
         int t = (int)m->sampler_custom_type;
-        t = (t - 1 + 6) % 6;
+        t = (t - 1 + 8) % 8;
         m->sampler_custom_type = (SamplerValueType)t;
         return MODAL_RESULT_NONE;
       }
       if ((ch == KEY_RIGHT) && m->sampler_custom_field == 1) {
         int t = (int)m->sampler_custom_type;
-        t = (t + 1) % 6;
+        t = (t + 1) % 8;
         m->sampler_custom_type = (SamplerValueType)t;
         return MODAL_RESULT_NONE;
       }
+      if ((ch == KEY_LEFT || ch == KEY_RIGHT) && m->sampler_custom_field == 2 &&
+          m->sampler_custom_type == SAMPLER_TYPE_BOOL) {
+        bool bval = (m->sampler_custom_value[0] == 't' ||
+                     m->sampler_custom_value[0] == 'T' ||
+                     m->sampler_custom_value[0] == '1');
+        strcpy(m->sampler_custom_value, bval ? "false" : "true");
+        return MODAL_RESULT_NONE;
+      }
       if (ch == '\n' || ch == '\r') {
-        bool is_list = (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT);
-        bool valid = m->sampler_custom_name[0] &&
-                     (is_list || m->sampler_custom_value[0]);
+        bool is_list = (m->sampler_custom_type >= SAMPLER_TYPE_LIST_FLOAT &&
+                        m->sampler_custom_type <= SAMPLER_TYPE_LIST_STRING);
+        bool is_dict = (m->sampler_custom_type == SAMPLER_TYPE_DICT);
+        bool is_bool = (m->sampler_custom_type == SAMPLER_TYPE_BOOL);
+        bool valid =
+            m->sampler_custom_name[0] &&
+            (is_list || is_dict || is_bool || m->sampler_custom_value[0]);
         if (valid) {
-          double val = atof(m->sampler_custom_value);
+          double val;
+          if (is_bool) {
+            val = (m->sampler_custom_value[0] == 't' ||
+                   m->sampler_custom_value[0] == 'T' ||
+                   m->sampler_custom_value[0] == '1')
+                      ? 1.0
+                      : 0.0;
+          } else {
+            val = atof(m->sampler_custom_value);
+          }
           double min_v =
               m->sampler_custom_min[0] ? atof(m->sampler_custom_min) : 0;
           double max_v =
@@ -2397,6 +2624,15 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
             m->sampler_list_scroll = 0;
             m->sampler_list_input[0] = '\0';
             m->sampler_list_input_cursor = 0;
+          } else if (is_dict) {
+            m->sampler_editing_dict = true;
+            m->sampler_dict_index = 0;
+            m->sampler_dict_scroll = 0;
+            m->sampler_dict_field = 0;
+            m->sampler_dict_key[0] = '\0';
+            m->sampler_dict_val[0] = '\0';
+            m->sampler_dict_cursor = 0;
+            m->sampler_dict_val_is_str = true;
           }
           return MODAL_RESULT_NONE;
         }
@@ -2556,6 +2792,177 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         return MODAL_RESULT_NONE;
       }
       m->sampler_editing_list = false;
+      return MODAL_RESULT_NONE;
+    }
+
+    if (m->sampler_editing_dict) {
+      int base_count = 27;
+      int idx = m->sampler_field_index;
+      if (idx >= base_count) {
+        CustomSampler *cs = &s->custom[idx - base_count];
+
+        if (ch == 27) {
+          m->sampler_editing_dict = false;
+          m->sampler_dict_key[0] = '\0';
+          m->sampler_dict_val[0] = '\0';
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch == KEY_UP) {
+          if (m->sampler_dict_index > 0)
+            m->sampler_dict_index--;
+          if (m->sampler_dict_index < m->sampler_dict_scroll)
+            m->sampler_dict_scroll = m->sampler_dict_index;
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch == KEY_DOWN) {
+          if (m->sampler_dict_index < cs->dict_count)
+            m->sampler_dict_index++;
+          int visible = 9;
+          if (m->sampler_dict_index >= m->sampler_dict_scroll + visible)
+            m->sampler_dict_scroll = m->sampler_dict_index - visible + 1;
+          return MODAL_RESULT_NONE;
+        }
+
+        if (ch == 'd' && m->sampler_dict_index < cs->dict_count &&
+            cs->dict_count > 0) {
+          for (int i = m->sampler_dict_index; i < cs->dict_count - 1; i++) {
+            cs->dict_entries[i] = cs->dict_entries[i + 1];
+          }
+          cs->dict_count--;
+          if (m->sampler_dict_index >= cs->dict_count && cs->dict_count > 0)
+            m->sampler_dict_index = cs->dict_count - 1;
+          if (m->sampler_dict_index < 0)
+            m->sampler_dict_index = 0;
+          return MODAL_RESULT_NONE;
+        }
+
+        if ((ch == '\n' || ch == '\r') &&
+            m->sampler_dict_index == cs->dict_count) {
+          if (cs->dict_count < MAX_DICT_ITEMS) {
+            m->sampler_dict_field = 0;
+            m->sampler_dict_key[0] = '\0';
+            m->sampler_dict_val[0] = '\0';
+            m->sampler_dict_cursor = 0;
+            m->sampler_dict_val_is_str = true;
+
+            WINDOW *dwin = m->win;
+            int dw = 40, ddh = 8;
+            int ddx = (m->width - dw) / 2;
+            int ddy = (m->height - ddh) / 2;
+            bool editing = true;
+            while (editing) {
+              for (int yy = ddy; yy < ddy + ddh; yy++)
+                mvwhline(dwin, yy, ddx, ' ', dw);
+              wattron(dwin, COLOR_PAIR(COLOR_PAIR_BORDER));
+              for (int yy = ddy; yy < ddy + ddh; yy++) {
+                mvwaddstr(dwin, yy, ddx, "│");
+                mvwaddstr(dwin, yy, ddx + dw - 1, "│");
+              }
+              mvwhline(dwin, ddy, ddx + 1, ACS_HLINE, dw - 2);
+              mvwhline(dwin, ddy + ddh - 1, ddx + 1, ACS_HLINE, dw - 2);
+              mvwaddch(dwin, ddy, ddx, ACS_ULCORNER);
+              mvwaddch(dwin, ddy, ddx + dw - 1, ACS_URCORNER);
+              mvwaddch(dwin, ddy + ddh - 1, ddx, ACS_LLCORNER);
+              mvwaddch(dwin, ddy + ddh - 1, ddx + dw - 1, ACS_LRCORNER);
+              wattroff(dwin, COLOR_PAIR(COLOR_PAIR_BORDER));
+
+              wattron(dwin, A_BOLD);
+              mvwprintw(dwin, ddy, ddx + (dw - 15) / 2, " Add Dict Entry ");
+              wattroff(dwin, A_BOLD);
+
+              mvwprintw(dwin, ddy + 2, ddx + 2, "Key:");
+              if (m->sampler_dict_field == 0)
+                wattron(dwin, A_REVERSE);
+              mvwprintw(dwin, ddy + 2, ddx + 8, "%-28.28s",
+                        m->sampler_dict_key);
+              if (m->sampler_dict_field == 0)
+                wattroff(dwin, A_REVERSE);
+
+              mvwprintw(dwin, ddy + 3, ddx + 2, "Type:");
+              if (m->sampler_dict_field == 1)
+                wattron(dwin, COLOR_PAIR(COLOR_PAIR_SWIPE));
+              mvwprintw(dwin, ddy + 3, ddx + 8, "←");
+              wattroff(dwin, COLOR_PAIR(COLOR_PAIR_SWIPE));
+              if (m->sampler_dict_val_is_str)
+                wattron(dwin, A_REVERSE);
+              mvwprintw(dwin, ddy + 3, ddx + 10, "str");
+              if (m->sampler_dict_val_is_str)
+                wattroff(dwin, A_REVERSE);
+              if (!m->sampler_dict_val_is_str)
+                wattron(dwin, A_REVERSE);
+              mvwprintw(dwin, ddy + 3, ddx + 15, "num");
+              if (!m->sampler_dict_val_is_str)
+                wattroff(dwin, A_REVERSE);
+              if (m->sampler_dict_field == 1)
+                wattron(dwin, COLOR_PAIR(COLOR_PAIR_SWIPE));
+              mvwprintw(dwin, ddy + 3, ddx + 19, "→");
+              wattroff(dwin, COLOR_PAIR(COLOR_PAIR_SWIPE));
+
+              mvwprintw(dwin, ddy + 4, ddx + 2, "Value:");
+              if (m->sampler_dict_field == 2)
+                wattron(dwin, A_REVERSE);
+              mvwprintw(dwin, ddy + 4, ddx + 9, "%-27.27s",
+                        m->sampler_dict_val);
+              if (m->sampler_dict_field == 2)
+                wattroff(dwin, A_REVERSE);
+
+              wattron(dwin, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+              mvwprintw(dwin, ddy + ddh - 2, ddx + 2,
+                        "Tab:next Enter:save Esc:cancel");
+              wattroff(dwin, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+
+              wrefresh(dwin);
+              int dch = wgetch(dwin);
+
+              if (dch == 27) {
+                editing = false;
+              } else if (dch == '\t') {
+                m->sampler_dict_field = (m->sampler_dict_field + 1) % 3;
+                m->sampler_dict_cursor = 0;
+              } else if (dch == KEY_LEFT && m->sampler_dict_field == 1) {
+                m->sampler_dict_val_is_str = !m->sampler_dict_val_is_str;
+              } else if (dch == KEY_RIGHT && m->sampler_dict_field == 1) {
+                m->sampler_dict_val_is_str = !m->sampler_dict_val_is_str;
+              } else if (dch == '\n' || dch == '\r') {
+                if (m->sampler_dict_key[0] && m->sampler_dict_val[0]) {
+                  DictEntry *de = &cs->dict_entries[cs->dict_count];
+                  strncpy(de->key, m->sampler_dict_key, DICT_KEY_LEN - 1);
+                  de->is_string = m->sampler_dict_val_is_str;
+                  if (de->is_string)
+                    strncpy(de->str_val, m->sampler_dict_val, DICT_VAL_LEN - 1);
+                  else
+                    de->num_val = atof(m->sampler_dict_val);
+                  cs->dict_count++;
+                  m->sampler_dict_index = cs->dict_count;
+                }
+                editing = false;
+              } else if (dch == KEY_BACKSPACE || dch == 127) {
+                char *buf = (m->sampler_dict_field == 0) ? m->sampler_dict_key
+                                                         : m->sampler_dict_val;
+                int len = (int)strlen(buf);
+                if (len > 0)
+                  buf[len - 1] = '\0';
+              } else if (dch >= 32 && dch < 127 && m->sampler_dict_field != 1) {
+                char *buf = (m->sampler_dict_field == 0) ? m->sampler_dict_key
+                                                         : m->sampler_dict_val;
+                int maxlen = (m->sampler_dict_field == 0) ? DICT_KEY_LEN - 1
+                                                          : DICT_VAL_LEN - 1;
+                int len = (int)strlen(buf);
+                if (len < maxlen) {
+                  buf[len] = (char)dch;
+                  buf[len + 1] = '\0';
+                }
+              }
+            }
+          }
+          return MODAL_RESULT_NONE;
+        }
+
+        return MODAL_RESULT_NONE;
+      }
+      m->sampler_editing_dict = false;
       return MODAL_RESULT_NONE;
     }
 
@@ -2753,12 +3160,27 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       int idx = m->sampler_field_index;
       if (idx >= base_field_count) {
         CustomSampler *cs = &s->custom[idx - base_field_count];
-        if (cs->type >= SAMPLER_TYPE_LIST_FLOAT && !m->sampler_input[0]) {
+        if (cs->type >= SAMPLER_TYPE_LIST_FLOAT &&
+            cs->type <= SAMPLER_TYPE_LIST_STRING && !m->sampler_input[0]) {
           m->sampler_editing_list = true;
           m->sampler_list_index = 0;
           m->sampler_list_scroll = 0;
           m->sampler_list_input[0] = '\0';
           m->sampler_list_input_cursor = 0;
+          return MODAL_RESULT_NONE;
+        }
+        if (cs->type == SAMPLER_TYPE_DICT && !m->sampler_input[0]) {
+          m->sampler_editing_dict = true;
+          m->sampler_dict_index = 0;
+          m->sampler_dict_scroll = 0;
+          m->sampler_dict_key[0] = '\0';
+          m->sampler_dict_val[0] = '\0';
+          m->sampler_dict_cursor = 0;
+          m->sampler_dict_val_is_str = true;
+          return MODAL_RESULT_NONE;
+        }
+        if (cs->type == SAMPLER_TYPE_BOOL && !m->sampler_input[0]) {
+          cs->value = (cs->value != 0) ? 0.0 : 1.0;
           return MODAL_RESULT_NONE;
         }
       }

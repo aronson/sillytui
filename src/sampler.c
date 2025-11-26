@@ -231,6 +231,11 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
             double list_vals[MAX_LIST_ITEMS] = {0};
             char list_strs[MAX_LIST_ITEMS][64] = {{0}};
             int list_cnt = 0;
+            char dict_keys[MAX_DICT_ITEMS][DICT_KEY_LEN] = {{0}};
+            char dict_str_vals[MAX_DICT_ITEMS][DICT_VAL_LEN] = {{0}};
+            double dict_num_vals[MAX_DICT_ITEMS] = {0};
+            bool dict_is_str[MAX_DICT_ITEMS] = {0};
+            int dict_cnt = 0;
             while (*p && *p != '}') {
               p = skip_ws(p);
               if (*p == ',') {
@@ -258,12 +263,16 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
                   ctype = SAMPLER_TYPE_INT;
                 else if (strcmp(tstr, "string") == 0)
                   ctype = SAMPLER_TYPE_STRING;
+                else if (strcmp(tstr, "bool") == 0)
+                  ctype = SAMPLER_TYPE_BOOL;
                 else if (strcmp(tstr, "list_float") == 0)
                   ctype = SAMPLER_TYPE_LIST_FLOAT;
                 else if (strcmp(tstr, "list_int") == 0)
                   ctype = SAMPLER_TYPE_LIST_INT;
                 else if (strcmp(tstr, "list_string") == 0)
                   ctype = SAMPLER_TYPE_LIST_STRING;
+                else if (strcmp(tstr, "dict") == 0)
+                  ctype = SAMPLER_TYPE_DICT;
                 else
                   ctype = SAMPLER_TYPE_FLOAT;
               } else if (strcmp(ckey, "is_int") == 0) {
@@ -303,6 +312,41 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
                   if (*p == ']')
                     p++;
                 }
+              } else if (strcmp(ckey, "dict") == 0) {
+                if (*p == '{') {
+                  p++;
+                  while (*p && *p != '}' && dict_cnt < MAX_DICT_ITEMS) {
+                    p = skip_ws(p);
+                    if (*p == ',') {
+                      p++;
+                      continue;
+                    }
+                    if (*p == '"') {
+                      char dkey[DICT_KEY_LEN] = {0};
+                      p = parse_string(p, dkey, sizeof(dkey));
+                      p = skip_ws(p);
+                      if (*p == ':')
+                        p++;
+                      p = skip_ws(p);
+                      strncpy(dict_keys[dict_cnt], dkey, DICT_KEY_LEN - 1);
+                      if (*p == '"') {
+                        char dval[DICT_VAL_LEN] = {0};
+                        p = parse_string(p, dval, sizeof(dval));
+                        strncpy(dict_str_vals[dict_cnt], dval,
+                                DICT_VAL_LEN - 1);
+                        dict_is_str[dict_cnt] = true;
+                      } else {
+                        dict_num_vals[dict_cnt] = parse_double(&p);
+                        dict_is_str[dict_cnt] = false;
+                      }
+                      dict_cnt++;
+                    } else {
+                      break;
+                    }
+                  }
+                  if (*p == '}')
+                    p++;
+                }
               }
             }
             if (*p == '}')
@@ -321,6 +365,15 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
               for (int li = 0; li < list_cnt; li++) {
                 cs->list_values[li] = list_vals[li];
                 strncpy(cs->list_strings[li], list_strs[li], 63);
+              }
+              cs->dict_count = dict_cnt;
+              for (int di = 0; di < dict_cnt; di++) {
+                strncpy(cs->dict_entries[di].key, dict_keys[di],
+                        DICT_KEY_LEN - 1);
+                strncpy(cs->dict_entries[di].str_val, dict_str_vals[di],
+                        DICT_VAL_LEN - 1);
+                cs->dict_entries[di].num_val = dict_num_vals[di];
+                cs->dict_entries[di].is_string = dict_is_str[di];
               }
               s->custom_count++;
             }
@@ -402,12 +455,36 @@ bool sampler_save(const SamplerSettings *s, ApiType api_type) {
       case SAMPLER_TYPE_LIST_STRING:
         type_str = "list_string";
         break;
+      case SAMPLER_TYPE_DICT:
+        type_str = "dict";
+        break;
+      case SAMPLER_TYPE_BOOL:
+        type_str = "bool";
+        break;
       default:
         type_str = "float";
         break;
       }
 
-      if (cs->type == SAMPLER_TYPE_STRING) {
+      if (cs->type == SAMPLER_TYPE_BOOL) {
+        fprintf(f,
+                "    {\"name\": \"%s\", \"type\": \"%s\", \"value\": %s}%s\n",
+                cs->name, type_str, cs->value != 0 ? "true" : "false",
+                i < s->custom_count - 1 ? "," : "");
+      } else if (cs->type == SAMPLER_TYPE_DICT) {
+        fprintf(f, "    {\"name\": \"%s\", \"type\": \"%s\", \"dict\": {",
+                cs->name, type_str);
+        for (int j = 0; j < cs->dict_count; j++) {
+          const DictEntry *de = &cs->dict_entries[j];
+          if (de->is_string)
+            fprintf(f, "\"%s\": \"%s\"", de->key, de->str_val);
+          else
+            fprintf(f, "\"%s\": %.4g", de->key, de->num_val);
+          if (j < cs->dict_count - 1)
+            fprintf(f, ", ");
+        }
+        fprintf(f, "}}%s\n", i < s->custom_count - 1 ? "," : "");
+      } else if (cs->type == SAMPLER_TYPE_STRING) {
         fprintf(f,
                 "    {\"name\": \"%s\", \"type\": \"%s\", \"str_value\": "
                 "\"%s\"}%s\n",

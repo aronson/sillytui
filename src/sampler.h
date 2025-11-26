@@ -8,15 +8,27 @@
 #define CUSTOM_SAMPLER_NAME_LEN 64
 #define CUSTOM_SAMPLER_STR_LEN 256
 #define MAX_LIST_ITEMS 32
+#define MAX_DICT_ITEMS 32
+#define DICT_KEY_LEN 32
+#define DICT_VAL_LEN 64
 
 typedef enum {
   SAMPLER_TYPE_FLOAT = 0,
   SAMPLER_TYPE_INT,
   SAMPLER_TYPE_STRING,
+  SAMPLER_TYPE_BOOL,
   SAMPLER_TYPE_LIST_FLOAT,
   SAMPLER_TYPE_LIST_INT,
-  SAMPLER_TYPE_LIST_STRING
+  SAMPLER_TYPE_LIST_STRING,
+  SAMPLER_TYPE_DICT
 } SamplerValueType;
+
+typedef struct {
+  char key[DICT_KEY_LEN];
+  char str_val[DICT_VAL_LEN];
+  double num_val;
+  bool is_string;
+} DictEntry;
 
 typedef struct {
   char name[CUSTOM_SAMPLER_NAME_LEN];
@@ -29,6 +41,8 @@ typedef struct {
   double list_values[MAX_LIST_ITEMS];
   char list_strings[MAX_LIST_ITEMS][64];
   int list_count;
+  DictEntry dict_entries[MAX_DICT_ITEMS];
+  int dict_count;
 } CustomSampler;
 
 typedef struct {
