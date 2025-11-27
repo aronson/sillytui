@@ -21,3 +21,31 @@ make run
 ```
 
 See `/help` for available commands.
+
+
+### Tokenization
+We have a self-contained tokenization library that supports the following tokenizers:
+- tiktoken
+- gpt2bpe
+- sentencepiece
+
+You can test it like this:
+
+```bash
+make example ARGS="--list"  # get a list of available tokenizers
+make example ARGS="-t deepseek 'Hello, world!'"
+
+# output:
+Tokenizer: deepseek (DeepSeek R1 (128k vocab))
+Text: "Hello, world!"
+
+Token count: 4
+
+Tokens: [19923, 14, 2058, 3]
+
+Decoded tokens:
+  [0] 19923 -> "Hello"
+  [1] 14 -> ","
+  [2] 2058 -> "\xc4\xa0world"
+  [3] 3 -> "!"
+```

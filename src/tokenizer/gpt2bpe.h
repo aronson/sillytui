@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #define GPT2_MAX_VOCAB_SIZE 200000
-#define GPT2_MAX_MERGES 200000
+#define GPT2_MAX_MERGES 400000
 #define GPT2_MAX_TOKEN_LEN 256
 #define GPT2_TRIE_SIZE (1 << 20)
 

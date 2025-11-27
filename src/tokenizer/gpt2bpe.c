@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VOCAB_HASH_SIZE (1 << 18)
-#define MERGE_HASH_SIZE (1 << 18)
+#define VOCAB_HASH_SIZE (1 << 19)
+#define MERGE_HASH_SIZE (1 << 20)
 
 static void init_byte_encoder(GPT2BPETokenizer *tok) {
   uint8_t bs[256];
@@ -344,8 +344,14 @@ static bool parse_vocab_json(GPT2BPETokenizer *tok, const char *json) {
       } else {
         token_buf[token_len++] = *p++;
       }
-      if (token_len >= sizeof(token_buf) - 4)
+      if (token_len >= sizeof(token_buf) - 4) {
+        while (*p && *p != '"') {
+          if (*p == '\\' && *(p + 1))
+            p++;
+          p++;
+        }
         break;
+      }
     }
 
     if (*p == '"')
