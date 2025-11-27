@@ -399,6 +399,74 @@ TEST(robust_tokenizer_unloaded) {
   PASS();
 }
 
+TEST(message_role_default_is_user) {
+  ChatHistory h;
+  history_init(&h);
+  history_add(&h, "Hello");
+  ASSERT_EQ_INT(ROLE_USER, history_get_role(&h, 0));
+  history_free(&h);
+  PASS();
+}
+
+TEST(message_role_add_with_role) {
+  ChatHistory h;
+  history_init(&h);
+  history_add_with_role(&h, "System message", ROLE_SYSTEM);
+  history_add_with_role(&h, "User message", ROLE_USER);
+  history_add_with_role(&h, "Assistant message", ROLE_ASSISTANT);
+  ASSERT_EQ_INT(ROLE_SYSTEM, history_get_role(&h, 0));
+  ASSERT_EQ_INT(ROLE_USER, history_get_role(&h, 1));
+  ASSERT_EQ_INT(ROLE_ASSISTANT, history_get_role(&h, 2));
+  history_free(&h);
+  PASS();
+}
+
+TEST(message_role_set_role) {
+  ChatHistory h;
+  history_init(&h);
+  history_add(&h, "Hello");
+  ASSERT_EQ_INT(ROLE_USER, history_get_role(&h, 0));
+  history_set_role(&h, 0, ROLE_SYSTEM);
+  ASSERT_EQ_INT(ROLE_SYSTEM, history_get_role(&h, 0));
+  history_set_role(&h, 0, ROLE_ASSISTANT);
+  ASSERT_EQ_INT(ROLE_ASSISTANT, history_get_role(&h, 0));
+  history_free(&h);
+  PASS();
+}
+
+TEST(message_role_to_string) {
+  ASSERT_EQ_STR("user", role_to_string(ROLE_USER));
+  ASSERT_EQ_STR("assistant", role_to_string(ROLE_ASSISTANT));
+  ASSERT_EQ_STR("system", role_to_string(ROLE_SYSTEM));
+  PASS();
+}
+
+TEST(message_role_from_string) {
+  ASSERT_EQ_INT(ROLE_USER, role_from_string("user"));
+  ASSERT_EQ_INT(ROLE_ASSISTANT, role_from_string("assistant"));
+  ASSERT_EQ_INT(ROLE_SYSTEM, role_from_string("system"));
+  ASSERT_EQ_INT(ROLE_USER, role_from_string("unknown"));
+  ASSERT_EQ_INT(ROLE_USER, role_from_string(NULL));
+  PASS();
+}
+
+TEST(message_role_null_safety) {
+  ASSERT_EQ_INT(ROLE_USER, history_get_role(NULL, 0));
+  history_set_role(NULL, 0, ROLE_SYSTEM);
+  PASS();
+}
+
+TEST(message_role_out_of_bounds) {
+  ChatHistory h;
+  history_init(&h);
+  history_add(&h, "Hello");
+  ASSERT_EQ_INT(ROLE_USER, history_get_role(&h, 100));
+  history_set_role(&h, 100, ROLE_SYSTEM);
+  ASSERT_EQ_INT(ROLE_USER, history_get_role(&h, 0));
+  history_free(&h);
+  PASS();
+}
+
 void run_robustness_tests(void) {
   TEST_SUITE("Robustness Tests");
   RUN_TEST(robust_history_very_long_message);
@@ -431,4 +499,11 @@ void run_robustness_tests(void) {
   RUN_TEST(robust_config_operations_on_empty);
   RUN_TEST(robust_sampler_operations_on_empty);
   RUN_TEST(robust_tokenizer_unloaded);
+  RUN_TEST(message_role_default_is_user);
+  RUN_TEST(message_role_add_with_role);
+  RUN_TEST(message_role_set_role);
+  RUN_TEST(message_role_to_string);
+  RUN_TEST(message_role_from_string);
+  RUN_TEST(message_role_null_safety);
+  RUN_TEST(message_role_out_of_bounds);
 }

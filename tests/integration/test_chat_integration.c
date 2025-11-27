@@ -202,6 +202,42 @@ TEST(chat_character_list_load_empty) {
   PASS();
 }
 
+TEST(chat_save_and_load_with_roles) {
+  setup_test_environment();
+
+  ChatHistory h;
+  history_init(&h);
+  history_add_with_role(&h, "You are a helpful assistant.", ROLE_SYSTEM);
+  history_add_with_role(&h, "Hello!", ROLE_USER);
+  history_add_with_role(&h, "Hi there!", ROLE_ASSISTANT);
+  history_add_with_role(&h, "Remember to be polite.", ROLE_SYSTEM);
+
+  char *id = chat_generate_id();
+  ASSERT_NOT_NULL(id);
+
+  bool saved = chat_save(&h, id, "Role Test", NULL, "TestChar");
+  ASSERT_TRUE(saved);
+
+  ChatHistory loaded;
+  history_init(&loaded);
+  char char_path[256];
+  bool ok = chat_load(&loaded, id, "TestChar", char_path, sizeof(char_path));
+  ASSERT_TRUE(ok);
+
+  ASSERT_EQ_SIZE(4, loaded.count);
+  ASSERT_EQ_INT(ROLE_SYSTEM, history_get_role(&loaded, 0));
+  ASSERT_EQ_INT(ROLE_USER, history_get_role(&loaded, 1));
+  ASSERT_EQ_INT(ROLE_ASSISTANT, history_get_role(&loaded, 2));
+  ASSERT_EQ_INT(ROLE_SYSTEM, history_get_role(&loaded, 3));
+
+  history_free(&h);
+  history_free(&loaded);
+  free(id);
+
+  teardown_test_environment();
+  PASS();
+}
+
 void run_chat_integration_tests(void) {
   TEST_SUITE("Chat Integration");
   RUN_TEST(chat_save_and_load_roundtrip);
@@ -214,4 +250,5 @@ void run_chat_integration_tests(void) {
   RUN_TEST(chat_save_with_swipes);
   RUN_TEST(chat_sanitize_dirname_special_chars);
   RUN_TEST(chat_character_list_load_empty);
+  RUN_TEST(chat_save_and_load_with_roles);
 }

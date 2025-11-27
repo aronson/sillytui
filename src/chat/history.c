@@ -22,6 +22,7 @@ static void message_init(ChatMessage *msg) {
   msg->token_counts = NULL;
   msg->gen_times = NULL;
   msg->output_tps = NULL;
+  msg->role = ROLE_USER;
 }
 
 static void message_free(ChatMessage *msg) {
@@ -314,4 +315,48 @@ double history_get_output_tps(const ChatHistory *history, size_t msg_index,
   if (swipe_index >= msg->swipe_count || !msg->output_tps)
     return 0.0;
   return msg->output_tps[swipe_index];
+}
+
+size_t history_add_with_role(ChatHistory *history, const char *message,
+                             MessageRole role) {
+  size_t idx = history_add(history, message);
+  if (idx != SIZE_MAX) {
+    history->messages[idx].role = role;
+  }
+  return idx;
+}
+
+MessageRole history_get_role(const ChatHistory *history, size_t index) {
+  if (!history || index >= history->count)
+    return ROLE_USER;
+  return history->messages[index].role;
+}
+
+void history_set_role(ChatHistory *history, size_t index, MessageRole role) {
+  if (!history || index >= history->count)
+    return;
+  history->messages[index].role = role;
+}
+
+const char *role_to_string(MessageRole role) {
+  switch (role) {
+  case ROLE_USER:
+    return "user";
+  case ROLE_ASSISTANT:
+    return "assistant";
+  case ROLE_SYSTEM:
+    return "system";
+  default:
+    return "user";
+  }
+}
+
+MessageRole role_from_string(const char *str) {
+  if (!str)
+    return ROLE_USER;
+  if (strcmp(str, "assistant") == 0)
+    return ROLE_ASSISTANT;
+  if (strcmp(str, "system") == 0)
+    return ROLE_SYSTEM;
+  return ROLE_USER;
 }

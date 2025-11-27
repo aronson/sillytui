@@ -417,6 +417,7 @@ bool chat_save(const ChatHistory *history, const char *id, const char *title,
   for (size_t i = 0; i < history->count; i++) {
     ChatMessage *msg = &history->messages[i];
     fprintf(f, "    {\n");
+    fprintf(f, "      \"role\": \"%s\",\n", role_to_string(msg->role));
     fprintf(f, "      \"active\": %zu,\n", msg->active_swipe);
     fprintf(f, "      \"swipes\": [\n");
     for (size_t j = 0; j < msg->swipe_count; j++) {
@@ -486,6 +487,25 @@ static bool try_load_chat_from_path(ChatHistory *history, const char *filepath,
     if (*p == '{') {
       p++;
       long active_swipe = 0;
+      MessageRole msg_role = ROLE_USER;
+
+      const char *role_key = strstr(p, "\"role\"");
+      if (role_key) {
+        const char *colon = strchr(role_key + 6, ':');
+        if (colon) {
+          const char *q = colon + 1;
+          while (*q == ' ' || *q == '\t')
+            q++;
+          if (*q == '"') {
+            q++;
+            if (strncmp(q, "assistant", 9) == 0)
+              msg_role = ROLE_ASSISTANT;
+            else if (strncmp(q, "system", 6) == 0)
+              msg_role = ROLE_SYSTEM;
+          }
+        }
+      }
+
       const char *active_key = strstr(p, "\"active\"");
       if (active_key) {
         const char *colon = strchr(active_key + 8, ':');
@@ -569,8 +589,11 @@ static bool try_load_chat_from_path(ChatHistory *history, const char *filepath,
           sp++;
       }
 
-      if (msg_idx != SIZE_MAX && active_swipe >= 0) {
-        history_set_active_swipe(history, msg_idx, (size_t)active_swipe);
+      if (msg_idx != SIZE_MAX) {
+        if (active_swipe >= 0) {
+          history_set_active_swipe(history, msg_idx, (size_t)active_swipe);
+        }
+        history_set_role(history, msg_idx, msg_role);
       }
 
       while (*p && *p != '}')
@@ -718,10 +741,12 @@ bool chat_delete(const char *id, const char *character_name) {
 }
 
 char *chat_generate_id(void) {
-  static char id[32];
+  char *id = malloc(32);
+  if (!id)
+    return NULL;
   time_t now = time(NULL);
   unsigned int r = (unsigned int)now ^ (unsigned int)getpid();
-  snprintf(id, sizeof(id), "%08x%04x", (unsigned int)now, r & 0xFFFF);
+  snprintf(id, 32, "%08x%04x", (unsigned int)now, r & 0xFFFF);
   return id;
 }
 
@@ -817,8 +842,11 @@ bool chat_auto_save(const ChatHistory *history, char *chat_id, size_t id_size,
 
   if (is_new) {
     char *new_id = chat_generate_id();
+    if (!new_id)
+      return false;
     strncpy(chat_id, new_id, id_size - 1);
     chat_id[id_size - 1] = '\0';
+    free(new_id);
 
     int next_index = chat_get_next_index(character_name);
     snprintf(title, sizeof(title), "Chat %d", next_index);

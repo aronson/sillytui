@@ -774,22 +774,20 @@ static char *build_anthropic_request_body(const ModelConfig *config,
     const char *msg = history_get(history, i);
     if (!msg)
       continue;
-    const char *role = NULL;
-    const char *content = NULL;
 
-    if (strncmp(msg, "You: ", 5) == 0) {
-      role = "user";
+    MessageRole msg_role = history_get_role(history, i);
+    const char *role =
+        (msg_role == ROLE_SYSTEM) ? "user" : role_to_string(msg_role);
+    const char *content = msg;
+
+    if (msg_role == ROLE_USER && strncmp(msg, "You: ", 5) == 0) {
       content = msg + 5;
-    } else if (strncmp(msg, "Bot: ", 5) == 0) {
-      role = "assistant";
+    } else if (msg_role == ROLE_ASSISTANT && strncmp(msg, "Bot: ", 5) == 0) {
       content = msg + 5;
-    } else if (strncmp(msg, "Bot:", 4) == 0) {
-      role = "assistant";
+    } else if (msg_role == ROLE_ASSISTANT && strncmp(msg, "Bot:", 4) == 0) {
       content = msg + 4;
       while (*content == ' ')
         content++;
-    } else {
-      continue;
     }
 
     char *escaped = escape_json_string(content);
@@ -972,22 +970,19 @@ static char *build_request_body(const ModelConfig *config,
     const char *msg = history_get(history, i);
     if (!msg)
       continue;
-    const char *role = NULL;
-    const char *content = NULL;
 
-    if (strncmp(msg, "You: ", 5) == 0) {
-      role = "user";
+    MessageRole msg_role = history_get_role(history, i);
+    const char *role = role_to_string(msg_role);
+    const char *content = msg;
+
+    if (msg_role == ROLE_USER && strncmp(msg, "You: ", 5) == 0) {
       content = msg + 5;
-    } else if (strncmp(msg, "Bot: ", 5) == 0) {
-      role = "assistant";
+    } else if (msg_role == ROLE_ASSISTANT && strncmp(msg, "Bot: ", 5) == 0) {
       content = msg + 5;
-    } else if (strncmp(msg, "Bot:", 4) == 0) {
-      role = "assistant";
+    } else if (msg_role == ROLE_ASSISTANT && strncmp(msg, "Bot:", 4) == 0) {
       content = msg + 4;
       while (*content == ' ')
         content++;
-    } else {
-      continue;
     }
 
     char *escaped = escape_json_string(content);

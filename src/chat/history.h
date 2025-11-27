@@ -6,6 +6,8 @@
 
 #define MAX_SWIPES 2048
 
+typedef enum { ROLE_USER = 0, ROLE_ASSISTANT = 1, ROLE_SYSTEM = 2 } MessageRole;
+
 typedef struct {
   char **swipes;
   size_t swipe_count;
@@ -13,6 +15,7 @@ typedef struct {
   int *token_counts;
   double *gen_times;
   double *output_tps;
+  MessageRole role;
 } ChatMessage;
 
 typedef struct {
@@ -51,5 +54,12 @@ void history_set_output_tps(ChatHistory *history, size_t msg_index,
                             size_t swipe_index, double tps);
 double history_get_output_tps(const ChatHistory *history, size_t msg_index,
                               size_t swipe_index);
+
+size_t history_add_with_role(ChatHistory *history, const char *message,
+                             MessageRole role);
+MessageRole history_get_role(const ChatHistory *history, size_t index);
+void history_set_role(ChatHistory *history, size_t index, MessageRole role);
+const char *role_to_string(MessageRole role);
+MessageRole role_from_string(const char *str);
 
 #endif

@@ -139,15 +139,18 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
   ModelConfig *model = config_get_active(mf);
   const char *model_name = get_model_name(mf);
   if (!model) {
-    history_add(history, "Bot: *looks confused* \"No model configured. Use "
-                         "/model set to add one.\"");
+    history_add_with_role(history,
+                          "Bot: *looks confused* \"No model configured. Use "
+                          "/model set to add one.\"",
+                          ROLE_ASSISTANT);
     *selected_msg = MSG_SELECT_NONE;
     ui_draw_chat(chat_win, history, *selected_msg, NULL, user_name, bot_name,
                  false);
     return;
   }
 
-  size_t msg_index = history_add(history, "Bot: *thinking*");
+  size_t msg_index =
+      history_add_with_role(history, "Bot: *thinking*", ROLE_ASSISTANT);
   if (msg_index == SIZE_MAX)
     return;
   *selected_msg = MSG_SELECT_NONE;
@@ -329,11 +332,12 @@ static bool handle_slash_command(const char *input, Modal *modal,
       if (substituted) {
         char first_msg[4096];
         snprintf(first_msg, sizeof(first_msg), "Bot: %s", substituted);
-        history_add(history, first_msg);
+        history_add_with_role(history, first_msg, ROLE_ASSISTANT);
         free(substituted);
       }
     } else {
-      history_add(history, "Bot: *waves* \"New chat started!\"");
+      history_add_with_role(history, "Bot: *waves* \"New chat started!\"",
+                            ROLE_ASSISTANT);
     }
     current_chat_id[0] = '\0';
     const char *char_name =
@@ -369,14 +373,14 @@ static bool handle_slash_command(const char *input, Modal *modal,
           if (substituted) {
             char first_msg[4096];
             snprintf(first_msg, sizeof(first_msg), "Bot: %s", substituted);
-            history_add(history, first_msg);
+            history_add_with_role(history, first_msg, ROLE_ASSISTANT);
             free(substituted);
           }
         } else {
           char welcome[256];
           snprintf(welcome, sizeof(welcome), "Bot: *%s appears* \"Hello!\"",
                    character->name);
-          history_add(history, welcome);
+          history_add_with_role(history, welcome, ROLE_ASSISTANT);
         }
         chat_auto_save(history, current_chat_id, CHAT_ID_MAX, current_char_path,
                        character->name);
@@ -419,7 +423,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
       character_free(character);
       *char_loaded = false;
       current_char_path[0] = '\0';
-      history_add(history, "Bot: *Character unloaded*");
+      history_add_with_role(history, "Bot: *Character unloaded*",
+                            ROLE_ASSISTANT);
     } else {
       modal_open_message(modal, "No character loaded", true);
     }
@@ -458,6 +463,7 @@ static bool handle_slash_command(const char *input, Modal *modal,
                        "/char info         - Character info\n"
                        "/char greetings    - Select greeting\n"
                        "/persona set       - Edit persona\n"
+                       "/sys <msg>         - Insert system message\n"
                        "/clear             - Clear chat history\n"
                        "/quit              - Exit\n"
                        "\n"
@@ -476,16 +482,30 @@ static bool handle_slash_command(const char *input, Modal *modal,
       if (substituted) {
         char first_msg[4096];
         snprintf(first_msg, sizeof(first_msg), "Bot: %s", substituted);
-        history_add(history, first_msg);
+        history_add_with_role(history, first_msg, ROLE_ASSISTANT);
         free(substituted);
       }
     } else {
-      history_add(history, "Bot: *clears throat* \"Fresh start!\"");
+      history_add_with_role(history, "Bot: *clears throat* \"Fresh start!\"",
+                            ROLE_ASSISTANT);
     }
     const char *char_name =
         (*char_loaded && character->name[0]) ? character->name : NULL;
     chat_auto_save(history, current_chat_id, CHAT_ID_MAX, current_char_path,
                    char_name);
+    return true;
+  }
+  if (strncmp(input, "/sys ", 5) == 0) {
+    const char *sys_msg = input + 5;
+    while (*sys_msg == ' ')
+      sys_msg++;
+    if (*sys_msg) {
+      history_add_with_role(history, sys_msg, ROLE_SYSTEM);
+      const char *char_name =
+          (*char_loaded && character->name[0]) ? character->name : NULL;
+      chat_auto_save(history, current_chat_id, CHAT_ID_MAX, current_char_path,
+                     char_name);
+    }
     return true;
   }
   return false;
@@ -557,23 +577,26 @@ int main(void) {
     in_place_edit.buffer[0] = '\0';
 
   if (models.count == 0) {
-    history_add(
+    history_add_with_role(
         &history,
         "Bot: *Welcome to SillyTUI!*\n\n"
         "To get started:\n"
         "  • /model set - Configure an LLM (API URL, key, model)\n"
         "  • /help - View all available commands\n\n"
         "Once configured, load a character card with /char load <path>\n"
-        "or simply type a message here!");
+        "or simply type a message here!",
+        ROLE_ASSISTANT);
   } else {
-    history_add(&history,
-                "Bot: *Welcome back!*\n\n"
-                "Quick tips:\n"
-                "  • /char load <path> - Load a character card\n"
-                "  • /chat load - Resume a saved conversation\n"
-                "  • /help - View all commands\n"
-                "  • ↑↓ arrows - Navigate messages, ←→ on bot msgs to swipe\n\n"
-                "Type a message to begin!");
+    history_add_with_role(
+        &history,
+        "Bot: *Welcome back!*\n\n"
+        "Quick tips:\n"
+        "  • /char load <path> - Load a character card\n"
+        "  • /chat load - Resume a saved conversation\n"
+        "  • /help - View all commands\n"
+        "  • ↑↓ arrows - Navigate messages, ←→ on bot msgs to swipe\n\n"
+        "Type a message to begin!",
+        ROLE_ASSISTANT);
   }
 
   const char *user_disp = get_user_display_name(&persona);
@@ -653,7 +676,7 @@ int main(void) {
           if (substituted) {
             char first_msg[4096];
             snprintf(first_msg, sizeof(first_msg), "Bot: %s", substituted);
-            history_add(&history, first_msg);
+            history_add_with_role(&history, first_msg, ROLE_ASSISTANT);
             free(substituted);
           }
           selected_msg = MSG_SELECT_NONE;

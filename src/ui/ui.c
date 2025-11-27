@@ -1,5 +1,6 @@
 #include "ui/ui.h"
 #include "chat/chat.h"
+#include "chat/history.h"
 #include "ui/markdown.h"
 #include <ctype.h>
 #include <stdlib.h>
@@ -14,6 +15,8 @@ static bool g_ui_colors = false;
 #define COLOR_PAIR_BOT_SEL 26
 #define COLOR_PAIR_HINT_SEL 27
 #define COLOR_PAIR_MODAL_BG 28
+#define COLOR_PAIR_SYSTEM 29
+#define COLOR_PAIR_SYSTEM_SEL 30
 
 #define SEL_BG 236
 
@@ -41,6 +44,8 @@ void ui_init_colors(void) {
   init_pair(COLOR_PAIR_BOT_SEL, COLOR_MAGENTA, SEL_BG);
   init_pair(COLOR_PAIR_HINT_SEL, 8, SEL_BG);
   init_pair(COLOR_PAIR_MODAL_BG, COLOR_WHITE, COLOR_BLACK);
+  init_pair(COLOR_PAIR_SYSTEM, COLOR_YELLOW, -1);
+  init_pair(COLOR_PAIR_SYSTEM_SEL, COLOR_YELLOW, SEL_BG);
   g_ui_colors = true;
 }
 
@@ -236,6 +241,7 @@ typedef struct {
   int line_len;
   bool is_user;
   bool is_bot;
+  bool is_system;
   bool is_first_line;
   bool is_spacer;
   bool is_name_line;
@@ -263,15 +269,17 @@ static int build_display_lines(const ChatHistory *history, int content_width,
     bool use_edit_buffer =
         edit && edit->active && edit->msg_index == (int)i && edit->buffer;
 
-    const char *content;
-    bool is_user = starts_with(msg, "You: ");
-    bool is_bot = starts_with(msg, "Bot:");
+    MessageRole role = history_get_role(history, i);
+    bool is_user = (role == ROLE_USER);
+    bool is_bot = (role == ROLE_ASSISTANT);
+    bool is_system = (role == ROLE_SYSTEM);
 
+    const char *content;
     if (use_edit_buffer) {
       content = edit->buffer;
-    } else if (is_user) {
+    } else if (is_user && starts_with(msg, "You: ")) {
       content = msg + 5;
-    } else if (is_bot) {
+    } else if (is_bot && starts_with(msg, "Bot:")) {
       content = msg + 4;
       while (*content == ' ')
         content++;
@@ -279,13 +287,14 @@ static int build_display_lines(const ChatHistory *history, int content_width,
       content = msg;
     }
 
-    if ((is_user || is_bot) && total < max_lines) {
+    if ((is_user || is_bot || is_system) && total < max_lines) {
       lines[total].msg_index = (int)i;
       lines[total].line_in_msg = -1;
       lines[total].line_start = NULL;
       lines[total].line_len = 0;
       lines[total].is_user = is_user;
       lines[total].is_bot = is_bot;
+      lines[total].is_system = is_system;
       lines[total].is_first_line = true;
       lines[total].is_spacer = false;
       lines[total].is_name_line = true;
@@ -303,6 +312,7 @@ static int build_display_lines(const ChatHistory *history, int content_width,
       lines[total].line_len = wrapped[line].len;
       lines[total].is_user = is_user;
       lines[total].is_bot = is_bot;
+      lines[total].is_system = is_system;
       lines[total].is_first_line = false;
       lines[total].is_spacer = false;
       lines[total].is_name_line = false;
@@ -321,6 +331,7 @@ static int build_display_lines(const ChatHistory *history, int content_width,
       lines[total].line_len = 0;
       lines[total].is_user = false;
       lines[total].is_bot = false;
+      lines[total].is_system = false;
       lines[total].is_first_line = false;
       lines[total].is_spacer = true;
       lines[total].is_name_line = false;
@@ -547,6 +558,14 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
           if (g_ui_colors)
             wattroff(chat_win, COLOR_PAIR(hint_pair) | A_DIM);
         }
+      } else if (dl->is_system) {
+        int pair = is_selected ? COLOR_PAIR_SYSTEM_SEL : COLOR_PAIR_SYSTEM;
+        if (g_ui_colors)
+          wattron(chat_win, COLOR_PAIR(pair) | A_BOLD);
+        mvwaddstr(chat_win, y, x, "⚙ ");
+        mvwaddstr(chat_win, y, x + 2, "System");
+        if (g_ui_colors)
+          wattroff(chat_win, COLOR_PAIR(pair) | A_BOLD);
       } else if (dl->is_bot) {
         int pair = is_selected ? COLOR_PAIR_BOT_SEL : COLOR_PAIR_BOT;
         if (g_ui_colors)
@@ -621,6 +640,13 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
       if (g_ui_colors)
         wattron(chat_win, COLOR_PAIR(pair) | A_DIM);
       mvwaddstr(chat_win, y, x, "│");
+      if (g_ui_colors)
+        wattroff(chat_win, COLOR_PAIR(pair) | A_DIM);
+    } else if (dl->is_system) {
+      int pair = is_selected ? COLOR_PAIR_SYSTEM_SEL : COLOR_PAIR_SYSTEM;
+      if (g_ui_colors)
+        wattron(chat_win, COLOR_PAIR(pair) | A_DIM);
+      mvwaddstr(chat_win, y, x, "┊");
       if (g_ui_colors)
         wattroff(chat_win, COLOR_PAIR(pair) | A_DIM);
     } else if (dl->is_bot) {
