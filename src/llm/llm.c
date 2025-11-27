@@ -850,7 +850,9 @@ static char *build_anthropic_request_body(const ModelConfig *config,
         content++;
     }
 
-    char *escaped = escape_json_string(content);
+    char *substituted = macro_substitute(content, char_name, user_name);
+    char *escaped = escape_json_string(substituted ? substituted : content);
+    free(substituted);
     if (!escaped)
       continue;
 
@@ -1122,7 +1124,9 @@ static char *build_request_body(const ModelConfig *config,
         content++;
     }
 
-    char *escaped = escape_json_string(content);
+    char *substituted = macro_substitute(content, char_name, user_name);
+    char *escaped = escape_json_string(substituted ? substituted : content);
+    free(substituted);
     if (!escaped)
       continue;
 
