@@ -1,6 +1,7 @@
 #ifndef CHAT_H
 #define CHAT_H
 
+#include "chat/author_note.h"
 #include "chat/history.h"
 #include <stdbool.h>
 #include <time.h>
@@ -34,8 +35,15 @@ bool chat_list_load_for_character(ChatList *list, const char *character_name);
 
 bool chat_save(const ChatHistory *history, const char *id, const char *title,
                const char *character_path, const char *character_name);
+bool chat_save_with_note(const ChatHistory *history, const AuthorNote *note,
+                         const char *id, const char *title,
+                         const char *character_path,
+                         const char *character_name);
 bool chat_load(ChatHistory *history, const char *id, const char *character_name,
                char *out_character_path, size_t path_size);
+bool chat_load_with_note(ChatHistory *history, AuthorNote *note, const char *id,
+                         const char *character_name, char *out_character_path,
+                         size_t path_size);
 bool chat_delete(const char *id, const char *character_name);
 
 char *chat_generate_id(void);
@@ -50,6 +58,10 @@ void chat_sanitize_dirname(const char *name, char *out, size_t out_size);
 
 bool chat_auto_save(const ChatHistory *history, char *chat_id, size_t id_size,
                     const char *character_path, const char *character_name);
+bool chat_auto_save_with_note(const ChatHistory *history,
+                              const AuthorNote *note, char *chat_id,
+                              size_t id_size, const char *character_path,
+                              const char *character_name);
 
 typedef struct {
   char name[CHAT_CHAR_NAME_MAX];

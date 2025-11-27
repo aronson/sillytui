@@ -686,21 +686,52 @@ static char *build_anthropic_request_body(const ModelConfig *config,
   pos += snprintf(body + pos, cap - pos, "{\"model\":\"%s\"", config->model_id);
 
   char *system_prompt = build_system_prompt(context);
-  if (system_prompt) {
-    char *escaped = escape_json_string(system_prompt);
-    if (escaped) {
-      size_t needed = strlen(escaped) + 64;
-      if (pos + needed >= cap) {
-        cap = (pos + needed) * 2;
-        char *tmp = realloc(body, cap);
-        if (tmp)
-          body = tmp;
+  const AuthorNote *note = context ? context->author_note : NULL;
+  bool note_before =
+      note && note->text[0] && note->position == AN_POS_BEFORE_SCENARIO;
+  bool note_after =
+      note && note->text[0] && note->position == AN_POS_AFTER_SCENARIO;
+
+  if (note_before || system_prompt || note_after) {
+    size_t sys_len = 0;
+    if (note_before)
+      sys_len += strlen(note->text) + 2;
+    if (system_prompt)
+      sys_len += strlen(system_prompt);
+    if (note_after)
+      sys_len += strlen(note->text) + 2;
+    char *combined = malloc(sys_len + 1);
+    if (combined) {
+      combined[0] = '\0';
+      if (note_before) {
+        strcat(combined, note->text);
+        if (system_prompt)
+          strcat(combined, "\n\n");
       }
-      pos += snprintf(body + pos, cap - pos, ",\"system\":\"%s\"", escaped);
-      free(escaped);
+      if (system_prompt)
+        strcat(combined, system_prompt);
+      if (note_after) {
+        if (system_prompt || note_before)
+          strcat(combined, "\n\n");
+        strcat(combined, note->text);
+      }
+      char *escaped = escape_json_string(combined);
+      if (escaped) {
+        size_t needed = strlen(escaped) + 64;
+        if (pos + needed >= cap) {
+          cap = (pos + needed) * 2;
+          char *tmp = realloc(body, cap);
+          if (tmp)
+            body = tmp;
+        }
+        pos += snprintf(body + pos, cap - pos, ",\"system\":\"%s\"", escaped);
+        free(escaped);
+      }
+      free(combined);
     }
-    free(system_prompt);
   }
+  if (system_prompt)
+    free(system_prompt);
 
   pos += snprintf(body + pos, cap - pos, ",\"messages\":[");
 
@@ -770,7 +801,36 @@ static char *build_anthropic_request_body(const ModelConfig *config,
     }
   }
 
+  bool note_in_chat = note && note->text[0] && note->position == AN_POS_IN_CHAT;
+  size_t note_inject_idx = SIZE_MAX;
+  if (note_in_chat && history->count > 0) {
+    size_t from_end = (size_t)note->depth;
+    if (from_end < history->count)
+      note_inject_idx = history->count - from_end;
+    else
+      note_inject_idx = start_index;
+  }
+
   for (size_t i = start_index; i < history->count; i++) {
+    if (note_in_chat && i == note_inject_idx) {
+      char *escaped_note = escape_json_string(note->text);
+      if (escaped_note) {
+        size_t needed = strlen(escaped_note) + 64;
+        if (pos + needed >= cap) {
+          cap = (pos + needed) * 2;
+          char *tmp = realloc(body, cap);
+          if (tmp)
+            body = tmp;
+        }
+        if (!first)
+          body[pos++] = ',';
+        first = false;
+        pos += snprintf(body + pos, cap - pos,
+                        "{\"role\":\"user\",\"content\":\"%s\"}", escaped_note);
+        free(escaped_note);
+      }
+    }
+
     const char *msg = history_get(history, i);
     if (!msg)
       continue;
@@ -882,6 +942,28 @@ static char *build_request_body(const ModelConfig *config,
   bool first = true;
 
   char *system_prompt = build_system_prompt(context);
+  const AuthorNote *note = context ? context->author_note : NULL;
+  bool note_before =
+      note && note->text[0] && note->position == AN_POS_BEFORE_SCENARIO;
+
+  if (note_before && note->text[0]) {
+    char *escaped = escape_json_string(note->text);
+    if (escaped) {
+      const char *role = author_note_role_to_string(note->role);
+      size_t needed = strlen(escaped) + 64;
+      if (pos + needed >= cap) {
+        cap = (pos + needed) * 2;
+        char *tmp = realloc(body, cap);
+        if (tmp)
+          body = tmp;
+      }
+      pos += snprintf(body + pos, cap - pos,
+                      "{\"role\":\"%s\",\"content\":\"%s\"}", role, escaped);
+      first = false;
+      free(escaped);
+    }
+  }
+
   if (system_prompt) {
     char *escaped = escape_json_string(system_prompt);
     if (escaped) {
@@ -892,12 +974,36 @@ static char *build_request_body(const ModelConfig *config,
         if (tmp)
           body = tmp;
       }
+      if (!first)
+        body[pos++] = ',';
       pos += snprintf(body + pos, cap - pos,
                       "{\"role\":\"system\",\"content\":\"%s\"}", escaped);
       first = false;
       free(escaped);
     }
     free(system_prompt);
+  }
+
+  bool note_after =
+      note && note->text[0] && note->position == AN_POS_AFTER_SCENARIO;
+  if (note_after) {
+    char *escaped = escape_json_string(note->text);
+    if (escaped) {
+      const char *role = author_note_role_to_string(note->role);
+      size_t needed = strlen(escaped) + 64;
+      if (pos + needed >= cap) {
+        cap = (pos + needed) * 2;
+        char *tmp = realloc(body, cap);
+        if (tmp)
+          body = tmp;
+      }
+      if (!first)
+        body[pos++] = ',';
+      pos += snprintf(body + pos, cap - pos,
+                      "{\"role\":\"%s\",\"content\":\"%s\"}", role, escaped);
+      first = false;
+      free(escaped);
+    }
   }
 
   if (context && context->character && context->character->mes_example) {
@@ -966,7 +1072,38 @@ static char *build_request_body(const ModelConfig *config,
     }
   }
 
+  bool note_in_chat = note && note->text[0] && note->position == AN_POS_IN_CHAT;
+  size_t note_inject_index = SIZE_MAX;
+  if (note_in_chat && history->count > 0) {
+    size_t from_end = (size_t)note->depth;
+    if (from_end < history->count)
+      note_inject_index = history->count - from_end;
+    else
+      note_inject_index = start_index;
+  }
+
   for (size_t i = start_index; i < history->count; i++) {
+    if (note_in_chat && i == note_inject_index) {
+      char *escaped_note = escape_json_string(note->text);
+      if (escaped_note) {
+        const char *note_role = author_note_role_to_string(note->role);
+        size_t needed = strlen(escaped_note) + 64;
+        if (pos + needed >= cap) {
+          cap = (pos + needed) * 2;
+          char *tmp = realloc(body, cap);
+          if (tmp)
+            body = tmp;
+        }
+        if (!first)
+          body[pos++] = ',';
+        first = false;
+        pos += snprintf(body + pos, cap - pos,
+                        "{\"role\":\"%s\",\"content\":\"%s\"}", note_role,
+                        escaped_note);
+        free(escaped_note);
+      }
+    }
+
     const char *msg = history_get(history, i);
     if (!msg)
       continue;

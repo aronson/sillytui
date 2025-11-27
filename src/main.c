@@ -11,6 +11,7 @@
 
 #include "character/character.h"
 #include "character/persona.h"
+#include "chat/author_note.h"
 #include "chat/chat.h"
 #include "chat/history.h"
 #include "core/config.h"
@@ -218,6 +219,11 @@ static const SlashCommand SLASH_COMMANDS[] = {
     {"char unload", "Unload current character"},
     {"persona set", "Edit your persona"},
     {"persona info", "Show your persona"},
+    {"sys", "Insert a system message"},
+    {"note", "Set/show author's note"},
+    {"note-depth", "Set author's note depth"},
+    {"note-pos", "Set author's note position"},
+    {"note-role", "Set author's note role"},
     {"help", "Show available commands"},
     {"clear", "Clear chat history"},
     {"quit", "Exit the application"},
@@ -228,7 +234,7 @@ static bool handle_slash_command(const char *input, Modal *modal,
                                  ModelsFile *mf, ChatHistory *history,
                                  char *current_chat_id, char *current_char_path,
                                  CharacterCard *character, Persona *persona,
-                                 bool *char_loaded) {
+                                 bool *char_loaded, AuthorNote *author_note) {
   if (strcmp(input, "/model set") == 0) {
     modal_open_model_set(modal);
     return true;
@@ -278,8 +284,9 @@ static bool handle_slash_command(const char *input, Modal *modal,
       bool loaded = false;
 
       if (chat_id[0]) {
-        loaded = chat_load(history, chat_id, char_name, loaded_char_path,
-                           sizeof(loaded_char_path));
+        loaded =
+            chat_load_with_note(history, author_note, chat_id, char_name,
+                                loaded_char_path, sizeof(loaded_char_path));
         if (loaded) {
           snprintf(current_chat_id, CHAT_ID_MAX, "%s", chat_id);
         }
@@ -287,6 +294,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
         loaded = chat_load_latest(history, char_name, loaded_char_path,
                                   sizeof(loaded_char_path), current_chat_id,
                                   CHAT_ID_MAX);
+        if (loaded && author_note)
+          author_note_init(author_note);
       }
 
       if (loaded) {
@@ -464,6 +473,11 @@ static bool handle_slash_command(const char *input, Modal *modal,
                        "/char greetings    - Select greeting\n"
                        "/persona set       - Edit persona\n"
                        "/sys <msg>         - Insert system message\n"
+                       "/note <text>       - Set author's note\n"
+                       "/note              - Show current note\n"
+                       "/note-depth <n>    - Set note depth\n"
+                       "/note-pos <pos>    - Set position\n"
+                       "/note-role <role>  - Set role\n"
                        "/clear             - Clear chat history\n"
                        "/quit              - Exit\n"
                        "\n"
@@ -509,6 +523,70 @@ static bool handle_slash_command(const char *input, Modal *modal,
       chat_auto_save(history, current_chat_id, CHAT_ID_MAX, current_char_path,
                      char_name);
     }
+    return true;
+  }
+  if (strncmp(input, "/note ", 6) == 0) {
+    const char *note_text = input + 6;
+    while (*note_text == ' ')
+      note_text++;
+    author_note_set_text(author_note, note_text);
+    char msg[256];
+    if (note_text[0]) {
+      snprintf(msg, sizeof(msg), "Author's Note set:\n\n\"%s\"", note_text);
+    } else {
+      snprintf(msg, sizeof(msg), "Author's Note cleared.");
+    }
+    modal_open_message(modal, msg, false);
+    return true;
+  }
+  if (strcmp(input, "/note") == 0) {
+    if (author_note->text[0]) {
+      char msg[512];
+      snprintf(msg, sizeof(msg),
+               "Author's Note:\n\n\"%s\"\n\n"
+               "Depth: %d  |  Position: %s  |  Role: %s",
+               author_note->text, author_note->depth,
+               author_note_position_to_string(author_note->position),
+               author_note_role_to_string(author_note->role));
+      modal_open_message(modal, msg, false);
+    } else {
+      modal_open_message(
+          modal, "No Author's Note set.\n\nUse /note <text> to set one.",
+          false);
+    }
+    return true;
+  }
+  if (strncmp(input, "/note-depth ", 12) == 0) {
+    int depth = atoi(input + 12);
+    author_note_set_depth(author_note, depth);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Author's Note depth set to %d",
+             author_note->depth);
+    modal_open_message(modal, msg, false);
+    return true;
+  }
+  if (strncmp(input, "/note-pos ", 10) == 0) {
+    const char *pos_str = input + 10;
+    while (*pos_str == ' ')
+      pos_str++;
+    AuthorNotePosition pos = author_note_position_from_string(pos_str);
+    author_note_set_position(author_note, pos);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Author's Note position set to %s",
+             author_note_position_to_string(author_note->position));
+    modal_open_message(modal, msg, false);
+    return true;
+  }
+  if (strncmp(input, "/note-role ", 11) == 0) {
+    const char *role_str = input + 11;
+    while (*role_str == ' ')
+      role_str++;
+    AuthorNoteRole role = author_note_role_from_string(role_str);
+    author_note_set_role(author_note, role);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Author's Note role set to %s",
+             author_note_role_to_string(author_note->role));
+    modal_open_message(modal, msg, false);
     return true;
   }
   return false;
@@ -573,6 +651,9 @@ int main(void) {
   bool running = true;
   char current_chat_id[CHAT_ID_MAX] = {0};
   char current_char_path[CHAT_CHAR_PATH_MAX] = {0};
+
+  AuthorNote author_note;
+  author_note_init(&author_note);
 
   InPlaceEdit in_place_edit = {0};
   in_place_edit.buf_cap = INPUT_MAX;
@@ -686,8 +767,9 @@ int main(void) {
           selected_msg = MSG_SELECT_NONE;
           input_focused = true;
 
-          chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                         current_char_path, character.name);
+          chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                   sizeof(current_chat_id), current_char_path,
+                                   character.name);
         }
       }
       if (result == MODAL_RESULT_MESSAGE_EDITED) {
@@ -705,8 +787,9 @@ int main(void) {
 
           const char *char_name =
               (character_loaded && character.name[0]) ? character.name : NULL;
-          chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                         current_char_path, char_name);
+          chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                   sizeof(current_chat_id), current_char_path,
+                                   char_name);
         }
         selected_msg = MSG_SELECT_NONE;
         input_focused = true;
@@ -718,8 +801,9 @@ int main(void) {
 
           const char *char_name =
               (character_loaded && character.name[0]) ? character.name : NULL;
-          chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                         current_char_path, char_name);
+          chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                   sizeof(current_chat_id), current_char_path,
+                                   char_name);
         }
         selected_msg = MSG_SELECT_NONE;
         input_focused = true;
@@ -838,6 +922,7 @@ int main(void) {
               } else {
                 char loaded_char_path[CHAT_CHAR_PATH_MAX] = {0};
                 const char *char_name = selected_id ? selected_id : selected;
+                author_note_init(&author_note);
                 if (chat_load_latest(&history, char_name, loaded_char_path,
                                      sizeof(loaded_char_path), current_chat_id,
                                      sizeof(current_chat_id))) {
@@ -981,8 +1066,8 @@ int main(void) {
           selected_msg--;
           const char *char_name =
               (character_loaded && character.name[0]) ? character.name : NULL;
-          chat_auto_save(&history, current_chat_id, CHAT_ID_MAX,
-                         current_char_path, char_name);
+          chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                   CHAT_ID_MAX, current_char_path, char_name);
         }
       } else if (input_focused) {
         selected_msg = (int)history.count - 1;
@@ -1077,8 +1162,8 @@ int main(void) {
           selected_msg++;
           const char *char_name =
               (character_loaded && character.name[0]) ? character.name : NULL;
-          chat_auto_save(&history, current_chat_id, CHAT_ID_MAX,
-                         current_char_path, char_name);
+          chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                   CHAT_ID_MAX, current_char_path, char_name);
         }
       } else if (selected_msg < (int)history.count - 1) {
         selected_msg++;
@@ -1119,8 +1204,9 @@ int main(void) {
 
             const char *char_name =
                 (character_loaded && character.name[0]) ? character.name : NULL;
-            chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                           current_char_path, char_name);
+            chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                     sizeof(current_chat_id), current_char_path,
+                                     char_name);
           }
         }
       }
@@ -1159,7 +1245,8 @@ int main(void) {
             LLMContext llm_ctx = {.character =
                                       character_loaded ? &character : NULL,
                                   .persona = &persona,
-                                  .samplers = &current_samplers};
+                                  .samplers = &current_samplers,
+                                  .author_note = &author_note};
 
             history_add_swipe(&history, selected_msg, "Bot: *thinking*");
             ui_draw_chat(chat_win, &history, selected_msg,
@@ -1222,8 +1309,9 @@ int main(void) {
 
             const char *char_name =
                 (character_loaded && character.name[0]) ? character.name : NULL;
-            chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                           current_char_path, char_name);
+            chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                     sizeof(current_chat_id), current_char_path,
+                                     char_name);
           }
         } else if (msg && strncmp(msg, "Bot:", 4) == 0) {
           size_t swipe_count = history_get_swipe_count(&history, selected_msg);
@@ -1235,8 +1323,9 @@ int main(void) {
 
             const char *char_name =
                 (character_loaded && character.name[0]) ? character.name : NULL;
-            chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                           current_char_path, char_name);
+            chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                     sizeof(current_chat_id), current_char_path,
+                                     char_name);
           }
         }
       }
@@ -1309,8 +1398,9 @@ int main(void) {
 
         const char *char_name =
             (character_loaded && character.name[0]) ? character.name : NULL;
-        chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                       current_char_path, char_name);
+        chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                                 sizeof(current_chat_id), current_char_path,
+                                 char_name);
         continue;
       }
       if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
@@ -1410,7 +1500,7 @@ int main(void) {
       if (input_buffer[0] == '/') {
         if (handle_slash_command(input_buffer, &modal, &models, &history,
                                  current_chat_id, current_char_path, &character,
-                                 &persona, &character_loaded)) {
+                                 &persona, &character_loaded, &author_note)) {
           input_buffer[0] = '\0';
           input_len = 0;
           cursor_pos = 0;
@@ -1475,14 +1565,16 @@ int main(void) {
         sampler_load(&current_samplers, active_model->api_type);
       LLMContext llm_ctx = {.character = character_loaded ? &character : NULL,
                             .persona = &persona,
-                            .samplers = &current_samplers};
+                            .samplers = &current_samplers,
+                            .author_note = &author_note};
       do_llm_reply(&history, chat_win, input_win, saved_input, &models,
                    &selected_msg, &llm_ctx, user_disp, bot_disp);
 
       const char *char_name =
           (character_loaded && character.name[0]) ? character.name : NULL;
-      chat_auto_save(&history, current_chat_id, sizeof(current_chat_id),
-                     current_char_path, char_name);
+      chat_auto_save_with_note(&history, &author_note, current_chat_id,
+                               sizeof(current_chat_id), current_char_path,
+                               char_name);
       continue;
     }
 

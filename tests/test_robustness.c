@@ -1,3 +1,4 @@
+#include "chat/author_note.h"
 #include "chat/history.h"
 #include "core/config.h"
 #include "core/macros.h"
@@ -567,6 +568,82 @@ TEST(history_move_preserves_swipes) {
   PASS();
 }
 
+TEST(author_note_init) {
+  AuthorNote note;
+  author_note_init(&note);
+  ASSERT_EQ_STR("", note.text);
+  ASSERT_EQ_INT(AN_POS_IN_CHAT, note.position);
+  ASSERT_EQ_INT(AN_ROLE_SYSTEM, note.role);
+  ASSERT_EQ_INT(4, note.depth);
+  ASSERT_EQ_INT(1, note.interval);
+  author_note_free(&note);
+  PASS();
+}
+
+TEST(author_note_set_get) {
+  AuthorNote note;
+  author_note_init(&note);
+
+  author_note_set_text(&note, "Be creative and descriptive.");
+  ASSERT_EQ_STR("Be creative and descriptive.", note.text);
+
+  author_note_set_depth(&note, 6);
+  ASSERT_EQ_INT(6, note.depth);
+
+  author_note_set_interval(&note, 2);
+  ASSERT_EQ_INT(2, note.interval);
+
+  author_note_free(&note);
+  PASS();
+}
+
+TEST(author_note_defaults) {
+  AuthorNote note;
+  author_note_init(&note);
+
+  ASSERT_EQ_INT(4, note.depth);
+  ASSERT_EQ_INT(1, note.interval);
+  ASSERT_EQ_INT(AN_POS_IN_CHAT, note.position);
+  ASSERT_EQ_INT(AN_ROLE_SYSTEM, note.role);
+
+  author_note_free(&note);
+  PASS();
+}
+
+TEST(author_note_position_values) {
+  AuthorNote note;
+  author_note_init(&note);
+
+  author_note_set_position(&note, AN_POS_BEFORE_SCENARIO);
+  ASSERT_EQ_INT(AN_POS_BEFORE_SCENARIO, note.position);
+
+  author_note_set_position(&note, AN_POS_AFTER_SCENARIO);
+  ASSERT_EQ_INT(AN_POS_AFTER_SCENARIO, note.position);
+
+  author_note_set_position(&note, AN_POS_IN_CHAT);
+  ASSERT_EQ_INT(AN_POS_IN_CHAT, note.position);
+
+  author_note_free(&note);
+  PASS();
+}
+
+TEST(author_note_role_values) {
+  AuthorNote note;
+  author_note_init(&note);
+
+  author_note_set_role(&note, AN_ROLE_SYSTEM);
+  ASSERT_EQ_INT(AN_ROLE_SYSTEM, note.role);
+
+  author_note_set_role(&note, AN_ROLE_USER);
+  ASSERT_EQ_INT(AN_ROLE_USER, note.role);
+
+  author_note_set_role(&note, AN_ROLE_ASSISTANT);
+  ASSERT_EQ_INT(AN_ROLE_ASSISTANT, note.role);
+
+  author_note_free(&note);
+  PASS();
+}
+
 void run_robustness_tests(void) {
   TEST_SUITE("Robustness Tests");
   RUN_TEST(robust_history_very_long_message);
@@ -612,4 +689,9 @@ void run_robustness_tests(void) {
   RUN_TEST(history_move_down_at_bottom);
   RUN_TEST(history_move_null_safety);
   RUN_TEST(history_move_preserves_swipes);
+  RUN_TEST(author_note_init);
+  RUN_TEST(author_note_set_get);
+  RUN_TEST(author_note_defaults);
+  RUN_TEST(author_note_position_values);
+  RUN_TEST(author_note_role_values);
 }

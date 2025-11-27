@@ -440,9 +440,102 @@ bool chat_save(const ChatHistory *history, const char *id, const char *title,
   return true;
 }
 
-static bool try_load_chat_from_path(ChatHistory *history, const char *filepath,
-                                    char *out_character_path,
-                                    size_t path_size) {
+bool chat_save_with_note(const ChatHistory *history, const AuthorNote *note,
+                         const char *id, const char *title,
+                         const char *character_path,
+                         const char *character_name) {
+  if (!ensure_character_chats_dir(character_name))
+    return false;
+
+  char char_dir[768];
+  if (!get_character_chats_dir(character_name, char_dir, sizeof(char_dir)))
+    return false;
+
+  char filepath[1024];
+  snprintf(filepath, sizeof(filepath), "%s/%s.json", char_dir, id);
+
+  FILE *f = fopen(filepath, "w");
+  if (!f)
+    return false;
+
+  time_t now = time(NULL);
+
+  char *escaped_title = escape_json(title);
+  if (!escaped_title) {
+    fclose(f);
+    return false;
+  }
+
+  fprintf(f, "{\n");
+  fprintf(f, "  \"id\": \"%s\",\n", id);
+  fprintf(f, "  \"title\": \"%s\",\n", escaped_title);
+  if (character_path && character_path[0]) {
+    char *escaped_path = escape_json(character_path);
+    if (escaped_path) {
+      fprintf(f, "  \"character_path\": \"%s\",\n", escaped_path);
+      free(escaped_path);
+    }
+  }
+  if (character_name && character_name[0]) {
+    char *escaped_name = escape_json(character_name);
+    if (escaped_name) {
+      fprintf(f, "  \"character_name\": \"%s\",\n", escaped_name);
+      free(escaped_name);
+    }
+  }
+  fprintf(f, "  \"created_at\": %ld,\n", (long)now);
+  fprintf(f, "  \"updated_at\": %ld,\n", (long)now);
+  fprintf(f, "  \"message_count\": %zu,\n", history->count);
+
+  if (note && note->text[0]) {
+    char *escaped_note = escape_json(note->text);
+    if (escaped_note) {
+      fprintf(f, "  \"author_note\": {\n");
+      fprintf(f, "    \"text\": \"%s\",\n", escaped_note);
+      fprintf(f, "    \"depth\": %d,\n", note->depth);
+      fprintf(f, "    \"interval\": %d,\n", note->interval);
+      fprintf(f, "    \"position\": \"%s\",\n",
+              author_note_position_to_string(note->position));
+      fprintf(f, "    \"role\": \"%s\"\n",
+              author_note_role_to_string(note->role));
+      fprintf(f, "  },\n");
+      free(escaped_note);
+    }
+  }
+
+  fprintf(f, "  \"messages\": [\n");
+
+  for (size_t i = 0; i < history->count; i++) {
+    ChatMessage *msg = &history->messages[i];
+    fprintf(f, "    {\n");
+    fprintf(f, "      \"role\": \"%s\",\n", role_to_string(msg->role));
+    fprintf(f, "      \"active\": %zu,\n", msg->active_swipe);
+    fprintf(f, "      \"swipes\": [\n");
+    for (size_t j = 0; j < msg->swipe_count; j++) {
+      char *escaped = escape_json(msg->swipes[j]);
+      if (escaped) {
+        fprintf(f, "        \"%s\"%s\n", escaped,
+                j < msg->swipe_count - 1 ? "," : "");
+        free(escaped);
+      }
+    }
+    fprintf(f, "      ]\n");
+    fprintf(f, "    }%s\n", i < history->count - 1 ? "," : "");
+  }
+
+  fprintf(f, "  ]\n");
+  fprintf(f, "}\n");
+
+  free(escaped_title);
+  fclose(f);
+  return true;
+}
+
+static bool try_load_chat_from_path_with_note(ChatHistory *history,
+                                              AuthorNote *note,
+                                              const char *filepath,
+                                              char *out_character_path,
+                                              size_t path_size) {
   char *content = read_file_contents(filepath, NULL);
   if (!content)
     return false;
@@ -454,6 +547,44 @@ static bool try_load_chat_from_path(ChatHistory *history, const char *filepath,
       strncpy(out_character_path, char_path, path_size - 1);
       out_character_path[path_size - 1] = '\0';
       free(char_path);
+    }
+  }
+
+  if (note) {
+    author_note_init(note);
+    const char *an_obj = strstr(content, "\"author_note\"");
+    if (an_obj) {
+      const char *an_start = strchr(an_obj + 13, '{');
+      if (an_start) {
+        char *text = find_json_string(an_start, "text");
+        if (text) {
+          author_note_set_text(note, text);
+          free(text);
+        }
+        const char *depth_key = strstr(an_start, "\"depth\"");
+        if (depth_key) {
+          const char *colon = strchr(depth_key + 7, ':');
+          if (colon)
+            author_note_set_depth(note, (int)strtol(colon + 1, NULL, 10));
+        }
+        const char *interval_key = strstr(an_start, "\"interval\"");
+        if (interval_key) {
+          const char *colon = strchr(interval_key + 10, ':');
+          if (colon)
+            author_note_set_interval(note, (int)strtol(colon + 1, NULL, 10));
+        }
+        char *pos_str = find_json_string(an_start, "position");
+        if (pos_str) {
+          author_note_set_position(note,
+                                   author_note_position_from_string(pos_str));
+          free(pos_str);
+        }
+        char *role_str = find_json_string(an_start, "role");
+        if (role_str) {
+          author_note_set_role(note, author_note_role_from_string(role_str));
+          free(role_str);
+        }
+      }
     }
   }
 
@@ -645,6 +776,13 @@ static bool try_load_chat_from_path(ChatHistory *history, const char *filepath,
   return true;
 }
 
+static bool try_load_chat_from_path(ChatHistory *history, const char *filepath,
+                                    char *out_character_path,
+                                    size_t path_size) {
+  return try_load_chat_from_path_with_note(history, NULL, filepath,
+                                           out_character_path, path_size);
+}
+
 bool chat_load(ChatHistory *history, const char *id, const char *character_name,
                char *out_character_path, size_t path_size) {
   if (character_name && character_name[0]) {
@@ -693,6 +831,56 @@ bool chat_load(ChatHistory *history, const char *id, const char *character_name,
   snprintf(filepath, sizeof(filepath), "%s/%s.json", base_dir, id);
   return try_load_chat_from_path(history, filepath, out_character_path,
                                  path_size);
+}
+
+bool chat_load_with_note(ChatHistory *history, AuthorNote *note, const char *id,
+                         const char *character_name, char *out_character_path,
+                         size_t path_size) {
+  if (character_name && character_name[0]) {
+    char char_dir[768];
+    if (get_character_chats_dir(character_name, char_dir, sizeof(char_dir))) {
+      char filepath[1024];
+      snprintf(filepath, sizeof(filepath), "%s/%s.json", char_dir, id);
+      if (try_load_chat_from_path_with_note(history, note, filepath,
+                                            out_character_path, path_size)) {
+        return true;
+      }
+    }
+  }
+
+  const char *base_dir = get_chats_dir();
+  if (!base_dir)
+    return false;
+
+  DIR *d = opendir(base_dir);
+  if (!d)
+    return false;
+
+  struct dirent *entry;
+  while ((entry = readdir(d)) != NULL) {
+    if (entry->d_name[0] == '.')
+      continue;
+    char subdir[768];
+    snprintf(subdir, sizeof(subdir), "%s/%s", base_dir, entry->d_name);
+    struct stat st;
+    if (stat(subdir, &st) != 0 || !S_ISDIR(st.st_mode))
+      continue;
+
+    char filepath[1024];
+    snprintf(filepath, sizeof(filepath), "%s/%s.json", subdir, id);
+    if (try_load_chat_from_path_with_note(history, note, filepath,
+                                          out_character_path, path_size)) {
+      closedir(d);
+      return true;
+    }
+  }
+
+  closedir(d);
+
+  char filepath[768];
+  snprintf(filepath, sizeof(filepath), "%s/%s.json", base_dir, id);
+  return try_load_chat_from_path_with_note(history, note, filepath,
+                                           out_character_path, path_size);
 }
 
 bool chat_delete(const char *id, const char *character_name) {
@@ -857,6 +1045,39 @@ bool chat_auto_save(const ChatHistory *history, char *chat_id, size_t id_size,
   }
 
   return chat_save(history, chat_id, title, character_path, character_name);
+}
+
+bool chat_auto_save_with_note(const ChatHistory *history,
+                              const AuthorNote *note, char *chat_id,
+                              size_t id_size, const char *character_path,
+                              const char *character_name) {
+  if (!history || !chat_id || id_size == 0)
+    return false;
+
+  if (history->count == 0)
+    return false;
+
+  bool is_new = (chat_id[0] == '\0');
+  char title[CHAT_TITLE_MAX];
+
+  if (is_new) {
+    char *new_id = chat_generate_id();
+    if (!new_id)
+      return false;
+    strncpy(chat_id, new_id, id_size - 1);
+    chat_id[id_size - 1] = '\0';
+    free(new_id);
+
+    int next_index = chat_get_next_index(character_name);
+    snprintf(title, sizeof(title), "Chat %d", next_index);
+  } else {
+    if (!chat_get_title_by_id(chat_id, character_name, title, sizeof(title))) {
+      snprintf(title, sizeof(title), "Chat");
+    }
+  }
+
+  return chat_save_with_note(history, note, chat_id, title, character_path,
+                             character_name);
 }
 
 void chat_character_list_init(ChatCharacterList *list) {

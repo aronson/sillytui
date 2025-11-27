@@ -19,6 +19,7 @@ set(SOURCES
     src/ui/markdown.c
     src/chat/chat.c
     src/chat/history.c
+    src/chat/author_note.c
     src/llm/llm.c
     src/llm/sampler.c
     src/character/character.c
@@ -53,6 +54,7 @@ set(TEST_SOURCES
     src/core/config.c
     src/core/macros.c
     src/chat/history.c
+    src/chat/author_note.c
     src/llm/sampler.c
     src/tokenizer/tiktoken.c
     src/tokenizer/simd.c
@@ -87,6 +89,7 @@ set(INTEGRATION_TEST_SOURCES
     src/core/macros.c
     src/chat/chat.c
     src/chat/history.c
+    src/chat/author_note.c
     src/llm/sampler.c
     src/character/character.c
     src/character/persona.c
@@ -142,6 +145,7 @@ set(ALL_TEST_SOURCES
     src/core/macros.c
     src/chat/chat.c
     src/chat/history.c
+    src/chat/author_note.c
     src/llm/sampler.c
     src/character/character.c
     src/character/persona.c

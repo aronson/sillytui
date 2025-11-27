@@ -3,6 +3,7 @@
 
 #include "character/character.h"
 #include "character/persona.h"
+#include "chat/author_note.h"
 #include "chat/history.h"
 #include "core/config.h"
 #include "llm/sampler.h"
@@ -28,6 +29,7 @@ typedef struct {
   const CharacterCard *character;
   const Persona *persona;
   const SamplerSettings *samplers;
+  const AuthorNote *author_note;
 } LLMContext;
 
 void llm_init(void);
