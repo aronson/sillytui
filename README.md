@@ -33,8 +33,18 @@ You can test it like this:
 
 ```bash
 make example ARGS="--list"  # get a list of available tokenizers
-make example ARGS="-t deepseek 'Hello, world!'"
+# output:
+Available tokenizers:
 
+  openai          OpenAI cl100k (GPT-4, GPT-3.5)
+  openai-o200k    OpenAI o200k (GPT-4o)
+  qwen3           Qwen 3 (151k vocab)
+  llama3          Llama 3 / 3.1 (128k vocab)
+  glm4            GLM-4.5 (151k vocab)
+  deepseek        DeepSeek R1 (128k vocab)
+
+
+make example ARGS="-t deepseek 'Hello, world!'"
 # output:
 Tokenizer: deepseek (DeepSeek R1 (128k vocab))
 Text: "Hello, world!"
