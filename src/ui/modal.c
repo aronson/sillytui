@@ -1,4 +1,5 @@
 #include "ui/modal.h"
+#include "llm/backends/backend.h"
 #include "ui/ui.h"
 #include <ctype.h>
 #include <stdlib.h>
@@ -407,29 +408,61 @@ static void draw_model_set(Modal *m) {
   draw_box_fancy(w, m->height, m->width);
   draw_title(w, m->width, "Add Model");
 
-  const char *labels[] = {"Name", "Base URL", "API Key", "Model ID",
-                          "Context Length"};
-  bool is_pw[] = {false, false, true, false, false};
   int field_w = m->width - 6;
+  int y = 2;
 
-  for (int i = 0; i < 5; i++) {
-    draw_field(w, 2 + i * 3, 3, field_w, labels[i], m->fields[i],
-               m->field_cursor[i], m->field_index == i, is_pw[i]);
-  }
-
-  int api_y = 2 + 5 * 3;
-  bool api_selected = (m->field_index == 5);
+  bool api_selected = (m->field_index == 0);
   if (api_selected)
     wattron(w, A_BOLD);
-  mvwprintw(w, api_y, 3, "API Type:");
+  mvwprintw(w, y, 3, "API Type:");
   if (api_selected)
     wattroff(w, A_BOLD);
 
   if (api_selected)
     wattron(w, A_REVERSE);
-  mvwprintw(w, api_y, 14, " < %s > ", api_type_name(m->api_type_selection));
+  mvwprintw(w, y, 14, " < %s > ", api_type_name(m->api_type_selection));
   if (api_selected)
     wattroff(w, A_REVERSE);
+  y += 2;
+
+  const char *labels[] = {"Name", "Base URL", "API Key", "Model", "Context"};
+  bool is_pw[] = {false, false, true, false, false};
+
+  for (int i = 0; i < 5; i++) {
+    int fi = i + 1;
+    bool model_field = (i == 3);
+    bool is_anthropic = (m->api_type_selection == API_TYPE_ANTHROPIC);
+
+    if (model_field && is_anthropic) {
+      bool selected = (m->field_index == fi);
+      if (selected)
+        wattron(w, A_BOLD);
+      mvwprintw(w, y, 3, "%s:", labels[i]);
+      if (selected)
+        wattroff(w, A_BOLD);
+
+      size_t count;
+      const char **models = anthropic_get_models(&count);
+      const char *display = m->fields[i][0] ? m->fields[i] : models[0];
+
+      if (selected)
+        wattron(w, A_REVERSE);
+      mvwprintw(w, y, 12, " < %.30s > ", display);
+      if (selected)
+        wattroff(w, A_REVERSE);
+
+      if (selected) {
+        wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+        mvwprintw(w, y + 1, 3, "←/→: cycle models, or type custom");
+        wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      }
+      y += 3;
+    } else {
+      draw_field(w, y, 3, field_w, labels[i], m->fields[i], m->field_cursor[i],
+                 m->field_index == fi, is_pw[i]);
+      y += 3;
+    }
+  }
 
   int btn_y = m->height - 2;
   draw_button(w, btn_y, m->width / 2 - 12, "Save", m->field_index == 6);
@@ -448,29 +481,61 @@ static void draw_model_edit(Modal *m) {
   draw_box_fancy(w, m->height, m->width);
   draw_title(w, m->width, "Edit Model");
 
-  const char *labels[] = {"Name", "Base URL", "API Key", "Model ID",
-                          "Context Length"};
-  bool is_pw[] = {false, false, true, false, false};
   int field_w = m->width - 6;
+  int y = 2;
 
-  for (int i = 0; i < 5; i++) {
-    draw_field(w, 2 + i * 3, 3, field_w, labels[i], m->fields[i],
-               m->field_cursor[i], m->field_index == i, is_pw[i]);
-  }
-
-  int api_y = 2 + 5 * 3;
-  bool api_selected = (m->field_index == 5);
+  bool api_selected = (m->field_index == 0);
   if (api_selected)
     wattron(w, A_BOLD);
-  mvwprintw(w, api_y, 3, "API Type:");
+  mvwprintw(w, y, 3, "API Type:");
   if (api_selected)
     wattroff(w, A_BOLD);
 
   if (api_selected)
     wattron(w, A_REVERSE);
-  mvwprintw(w, api_y, 14, " < %s > ", api_type_name(m->api_type_selection));
+  mvwprintw(w, y, 14, " < %s > ", api_type_name(m->api_type_selection));
   if (api_selected)
     wattroff(w, A_REVERSE);
+  y += 2;
+
+  const char *labels[] = {"Name", "Base URL", "API Key", "Model", "Context"};
+  bool is_pw[] = {false, false, true, false, false};
+
+  for (int i = 0; i < 5; i++) {
+    int fi = i + 1;
+    bool model_field = (i == 3);
+    bool is_anthropic = (m->api_type_selection == API_TYPE_ANTHROPIC);
+
+    if (model_field && is_anthropic) {
+      bool selected = (m->field_index == fi);
+      if (selected)
+        wattron(w, A_BOLD);
+      mvwprintw(w, y, 3, "%s:", labels[i]);
+      if (selected)
+        wattroff(w, A_BOLD);
+
+      size_t count;
+      const char **models = anthropic_get_models(&count);
+      const char *display = m->fields[i][0] ? m->fields[i] : models[0];
+
+      if (selected)
+        wattron(w, A_REVERSE);
+      mvwprintw(w, y, 12, " < %.30s > ", display);
+      if (selected)
+        wattroff(w, A_REVERSE);
+
+      if (selected) {
+        wattron(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+        mvwprintw(w, y + 1, 3, "←/→: cycle models, or type custom");
+        wattroff(w, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      }
+      y += 3;
+    } else {
+      draw_field(w, y, 3, field_w, labels[i], m->fields[i], m->field_cursor[i],
+                 m->field_index == fi, is_pw[i]);
+      y += 3;
+    }
+  }
 
   int btn_y = m->height - 2;
   draw_button(w, btn_y, m->width / 2 - 12, "Save", m->field_index == 6);
@@ -2017,6 +2082,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       modal_close(m);
       return MODAL_RESULT_NONE;
     }
+
     if (ch == '\t' || ch == KEY_DOWN) {
       m->field_index = (m->field_index + 1) % 8;
       return MODAL_RESULT_NONE;
@@ -2025,7 +2091,8 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       m->field_index = (m->field_index + 7) % 8;
       return MODAL_RESULT_NONE;
     }
-    if (m->field_index == 5) {
+
+    if (m->field_index == 0) {
       if (ch == KEY_LEFT || ch == 'h') {
         m->api_type_selection =
             (m->api_type_selection + API_TYPE_COUNT - 1) % API_TYPE_COUNT;
@@ -2036,6 +2103,40 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         return MODAL_RESULT_NONE;
       }
     }
+
+    if (m->field_index == 4 && m->api_type_selection == API_TYPE_ANTHROPIC) {
+      size_t count;
+      const char **models = anthropic_get_models(&count);
+      if (ch == KEY_LEFT || ch == 'h') {
+        int current = -1;
+        for (size_t i = 0; i < count; i++) {
+          if (strcmp(m->fields[3], models[i]) == 0) {
+            current = (int)i;
+            break;
+          }
+        }
+        int next = (current <= 0) ? (int)count - 1 : current - 1;
+        strncpy(m->fields[3], models[next], sizeof(m->fields[3]) - 1);
+        m->field_len[3] = (int)strlen(m->fields[3]);
+        m->field_cursor[3] = m->field_len[3];
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_RIGHT || ch == 'l') {
+        int current = -1;
+        for (size_t i = 0; i < count; i++) {
+          if (strcmp(m->fields[3], models[i]) == 0) {
+            current = (int)i;
+            break;
+          }
+        }
+        int next = (current < 0 || current >= (int)count - 1) ? 0 : current + 1;
+        strncpy(m->fields[3], models[next], sizeof(m->fields[3]) - 1);
+        m->field_len[3] = (int)strlen(m->fields[3]);
+        m->field_cursor[3] = m->field_len[3];
+        return MODAL_RESULT_NONE;
+      }
+    }
+
     if (ch == '\n' || ch == '\r') {
       if (m->field_index == 7) {
         modal_close(m);
@@ -2080,8 +2181,53 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       return MODAL_RESULT_NONE;
     }
 
-    if (m->field_index < 5) {
-      handle_field_key(m, ch);
+    if (m->field_index >= 1 && m->field_index <= 5) {
+      int fi = m->field_index - 1;
+      char *field = m->fields[fi];
+      int *cursor = &m->field_cursor[fi];
+      int *len = &m->field_len[fi];
+      int max_len = (int)sizeof(m->fields[0]) - 1;
+
+      if (ch == KEY_LEFT) {
+        if (*cursor > 0)
+          (*cursor)--;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_RIGHT) {
+        if (*cursor < *len)
+          (*cursor)++;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_HOME || ch == 1) {
+        *cursor = 0;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_END || ch == 5) {
+        *cursor = *len;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+        if (*cursor > 0) {
+          memmove(&field[*cursor - 1], &field[*cursor], *len - *cursor + 1);
+          (*len)--;
+          (*cursor)--;
+        }
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_DC) {
+        if (*cursor < *len) {
+          memmove(&field[*cursor], &field[*cursor + 1], *len - *cursor);
+          (*len)--;
+        }
+        return MODAL_RESULT_NONE;
+      }
+      if (isprint(ch) && *len < max_len) {
+        memmove(&field[*cursor + 1], &field[*cursor], *len - *cursor + 1);
+        field[*cursor] = (char)ch;
+        (*len)++;
+        (*cursor)++;
+        return MODAL_RESULT_NONE;
+      }
     }
     return MODAL_RESULT_NONE;
   }
@@ -2145,6 +2291,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       modal_open_model_list(m, mf);
       return MODAL_RESULT_NONE;
     }
+
     if (ch == '\t' || ch == KEY_DOWN) {
       m->field_index = (m->field_index + 1) % 8;
       return MODAL_RESULT_NONE;
@@ -2153,7 +2300,8 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       m->field_index = (m->field_index + 7) % 8;
       return MODAL_RESULT_NONE;
     }
-    if (m->field_index == 5) {
+
+    if (m->field_index == 0) {
       if (ch == KEY_LEFT || ch == 'h') {
         m->api_type_selection =
             (m->api_type_selection + API_TYPE_COUNT - 1) % API_TYPE_COUNT;
@@ -2164,6 +2312,40 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
         return MODAL_RESULT_NONE;
       }
     }
+
+    if (m->field_index == 4 && m->api_type_selection == API_TYPE_ANTHROPIC) {
+      size_t count;
+      const char **models = anthropic_get_models(&count);
+      if (ch == KEY_LEFT || ch == 'h') {
+        int current = -1;
+        for (size_t i = 0; i < count; i++) {
+          if (strcmp(m->fields[3], models[i]) == 0) {
+            current = (int)i;
+            break;
+          }
+        }
+        int next = (current <= 0) ? (int)count - 1 : current - 1;
+        strncpy(m->fields[3], models[next], sizeof(m->fields[3]) - 1);
+        m->field_len[3] = (int)strlen(m->fields[3]);
+        m->field_cursor[3] = m->field_len[3];
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_RIGHT || ch == 'l') {
+        int current = -1;
+        for (size_t i = 0; i < count; i++) {
+          if (strcmp(m->fields[3], models[i]) == 0) {
+            current = (int)i;
+            break;
+          }
+        }
+        int next = (current < 0 || current >= (int)count - 1) ? 0 : current + 1;
+        strncpy(m->fields[3], models[next], sizeof(m->fields[3]) - 1);
+        m->field_len[3] = (int)strlen(m->fields[3]);
+        m->field_cursor[3] = m->field_len[3];
+        return MODAL_RESULT_NONE;
+      }
+    }
+
     if (ch == '\n' || ch == '\r') {
       if (m->field_index == 7) {
         modal_open_model_list(m, mf);
@@ -2201,8 +2383,53 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
       return MODAL_RESULT_NONE;
     }
 
-    if (m->field_index < 5) {
-      handle_field_key(m, ch);
+    if (m->field_index >= 1 && m->field_index <= 5) {
+      int fi = m->field_index - 1;
+      char *field = m->fields[fi];
+      int *cursor = &m->field_cursor[fi];
+      int *len = &m->field_len[fi];
+      int max_len = (int)sizeof(m->fields[0]) - 1;
+
+      if (ch == KEY_LEFT) {
+        if (*cursor > 0)
+          (*cursor)--;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_RIGHT) {
+        if (*cursor < *len)
+          (*cursor)++;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_HOME || ch == 1) {
+        *cursor = 0;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_END || ch == 5) {
+        *cursor = *len;
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+        if (*cursor > 0) {
+          memmove(&field[*cursor - 1], &field[*cursor], *len - *cursor + 1);
+          (*len)--;
+          (*cursor)--;
+        }
+        return MODAL_RESULT_NONE;
+      }
+      if (ch == KEY_DC) {
+        if (*cursor < *len) {
+          memmove(&field[*cursor], &field[*cursor + 1], *len - *cursor);
+          (*len)--;
+        }
+        return MODAL_RESULT_NONE;
+      }
+      if (isprint(ch) && *len < max_len) {
+        memmove(&field[*cursor + 1], &field[*cursor], *len - *cursor + 1);
+        field[*cursor] = (char)ch;
+        (*len)++;
+        (*cursor)++;
+        return MODAL_RESULT_NONE;
+      }
     }
     return MODAL_RESULT_NONE;
   }
