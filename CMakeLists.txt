@@ -28,6 +28,7 @@ set(SOURCES
     src/llm/backends/kobold.c
     src/character/character.c
     src/character/persona.c
+    src/lore/lorebook.c
     src/tokenizer/tiktoken.c
     src/tokenizer/sentencepiece.c
     src/tokenizer/gpt2bpe.c
@@ -129,6 +130,7 @@ set(ALL_TEST_SOURCES
     tests/test_modal.c
     tests/test_struct_sizes.c
     tests/test_robustness.c
+    tests/test_lorebook.c
     tests/boundary/test_boundary.c
     tests/stress/test_stress.c
     tests/generated/test_unicode_gen.c
@@ -153,6 +155,7 @@ set(ALL_TEST_SOURCES
     src/llm/sampler.c
     src/character/character.c
     src/character/persona.c
+    src/lore/lorebook.c
     src/tokenizer/tiktoken.c
     src/tokenizer/gpt2bpe.c
     src/tokenizer/sentencepiece.c

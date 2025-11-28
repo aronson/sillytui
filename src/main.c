@@ -18,6 +18,7 @@
 #include "core/macros.h"
 #include "llm/llm.h"
 #include "llm/sampler.h"
+#include "lore/lorebook.h"
 #include "ui/markdown.h"
 #include "ui/modal.h"
 #include "ui/ui.h"
@@ -279,6 +280,11 @@ static const SlashCommand SLASH_COMMANDS[] = {
     {"note-depth", "Set author's note depth"},
     {"note-pos", "Set author's note position"},
     {"note-role", "Set author's note role"},
+    {"lore load", "Load a lorebook/world info"},
+    {"lore info", "Show loaded lorebook info"},
+    {"lore list", "List lorebook entries"},
+    {"lore toggle", "Toggle lorebook entry"},
+    {"lore clear", "Unload lorebook"},
     {"help", "Show available commands"},
     {"clear", "Clear chat history"},
     {"quit", "Exit the application"},
@@ -289,7 +295,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
                                  ModelsFile *mf, ChatHistory *history,
                                  char *current_chat_id, char *current_char_path,
                                  CharacterCard *character, Persona *persona,
-                                 bool *char_loaded, AuthorNote *author_note) {
+                                 bool *char_loaded, AuthorNote *author_note,
+                                 Lorebook *lorebook) {
   if (strcmp(input, "/model set") == 0) {
     modal_open_model_set(modal);
     return true;
@@ -531,19 +538,15 @@ static bool handle_slash_command(const char *input, Modal *modal,
                        "/persona set       - Edit persona\n"
                        "/sys <msg>         - Insert system message\n"
                        "/note <text>       - Set author's note\n"
-                       "/note              - Show current note\n"
                        "/note-depth <n>    - Set note depth\n"
-                       "/note-pos <pos>    - Set position\n"
-                       "/note-role <role>  - Set role\n"
+                       "/lore load <file>  - Load lorebook\n"
+                       "/lore info         - Lorebook info\n"
+                       "/lore list         - List entries\n"
+                       "/lore toggle <id>  - Toggle entry\n"
                        "/clear             - Clear chat history\n"
                        "/quit              - Exit\n"
                        "\n"
-                       "Shortcuts:\n"
-                       "↑/↓                - Navigate messages\n"
-                       "m                  - Move selected message\n"
-                       "e                  - Edit message\n"
-                       "d                  - Delete message\n"
-                       "Esc                - Close / Exit",
+                       "↑/↓ navigate, m move, e edit, d delete",
                        false);
     return true;
   }
@@ -647,6 +650,90 @@ static bool handle_slash_command(const char *input, Modal *modal,
     modal_open_message(modal, msg, false);
     return true;
   }
+  if (strncmp(input, "/lore load ", 11) == 0) {
+    const char *path = input + 11;
+    while (*path == ' ')
+      path++;
+    if (*path) {
+      lorebook_free(lorebook);
+      lorebook_init(lorebook);
+      if (lorebook_load_json(lorebook, path)) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Loaded lorebook: %s (%zu entries)",
+                 lorebook->name, lorebook->entry_count);
+        modal_open_message(modal, msg, false);
+      } else {
+        modal_open_message(modal, "Failed to load lorebook", false);
+      }
+      return true;
+    }
+  }
+  if (strcmp(input, "/lore info") == 0) {
+    if (lorebook->entry_count == 0) {
+      modal_open_message(modal, "No lorebook loaded. Use /lore load <path>",
+                         false);
+    } else {
+      char msg[512];
+      snprintf(msg, sizeof(msg),
+               "Lorebook: %s\n"
+               "Description: %s\n"
+               "Entries: %zu\n"
+               "Scan Depth: %d\n"
+               "Recursive: %s",
+               lorebook->name, lorebook->description, lorebook->entry_count,
+               lorebook->default_scan_depth,
+               lorebook->recursive_scanning ? "Yes" : "No");
+      modal_open_message(modal, msg, false);
+    }
+    return true;
+  }
+  if (strcmp(input, "/lore list") == 0) {
+    if (lorebook->entry_count == 0) {
+      modal_open_message(modal, "No lorebook loaded", false);
+    } else {
+      size_t msg_size = 4096;
+      char *msg = malloc(msg_size);
+      if (msg) {
+        size_t pos = 0;
+        pos += snprintf(msg + pos, msg_size - pos, "Lorebook entries:\n\n");
+        for (size_t i = 0; i < lorebook->entry_count && pos < msg_size - 128;
+             i++) {
+          const LoreEntry *e = &lorebook->entries[i];
+          pos += snprintf(msg + pos, msg_size - pos, "%d. %s%s [", e->uid,
+                          e->comment, e->disabled ? " (OFF)" : "");
+          for (size_t j = 0; j < e->key_count && j < 3; j++) {
+            pos += snprintf(msg + pos, msg_size - pos, "%s%s", e->keys[j],
+                            j + 1 < e->key_count && j + 1 < 3 ? ", " : "");
+          }
+          if (e->key_count > 3)
+            pos += snprintf(msg + pos, msg_size - pos, "...");
+          pos += snprintf(msg + pos, msg_size - pos, "]\n");
+        }
+        modal_open_message(modal, msg, false);
+        free(msg);
+      }
+    }
+    return true;
+  }
+  if (strncmp(input, "/lore toggle ", 13) == 0) {
+    int uid = atoi(input + 13);
+    if (uid > 0 && lorebook_toggle_entry(lorebook, uid)) {
+      LoreEntry *e = lorebook_get_entry(lorebook, uid);
+      char msg[128];
+      snprintf(msg, sizeof(msg), "Entry %d (%s) is now %s", uid,
+               e ? e->comment : "?", e && e->disabled ? "disabled" : "enabled");
+      modal_open_message(modal, msg, false);
+    } else {
+      modal_open_message(modal, "Entry not found", false);
+    }
+    return true;
+  }
+  if (strcmp(input, "/lore clear") == 0) {
+    lorebook_free(lorebook);
+    lorebook_init(lorebook);
+    modal_open_message(modal, "Lorebook cleared", false);
+    return true;
+  }
   return false;
 }
 
@@ -670,6 +757,9 @@ int main(void) {
   CharacterCard character;
   memset(&character, 0, sizeof(character));
   bool character_loaded = false;
+
+  Lorebook lorebook;
+  lorebook_init(&lorebook);
 
   llm_init();
 
@@ -1306,7 +1396,8 @@ int main(void) {
                                       character_loaded ? &character : NULL,
                                   .persona = &persona,
                                   .samplers = &current_samplers,
-                                  .author_note = &author_note};
+                                  .author_note = &author_note,
+                                  .lorebook = &lorebook};
 
             history_add_swipe(&history, selected_msg, "Bot: *thinking*");
             ui_draw_chat(chat_win, &history, selected_msg,
@@ -1584,7 +1675,8 @@ int main(void) {
       if (input_buffer[0] == '/') {
         if (handle_slash_command(input_buffer, &modal, &models, &history,
                                  current_chat_id, current_char_path, &character,
-                                 &persona, &character_loaded, &author_note)) {
+                                 &persona, &character_loaded, &author_note,
+                                 &lorebook)) {
           input_buffer[0] = '\0';
           input_len = 0;
           cursor_pos = 0;
@@ -1650,7 +1742,8 @@ int main(void) {
       LLMContext llm_ctx = {.character = character_loaded ? &character : NULL,
                             .persona = &persona,
                             .samplers = &current_samplers,
-                            .author_note = &author_note};
+                            .author_note = &author_note,
+                            .lorebook = &lorebook};
       do_llm_reply(&history, chat_win, input_win, saved_input, &models,
                    &selected_msg, &llm_ctx, user_disp, bot_disp);
 
@@ -1798,6 +1891,7 @@ int main(void) {
   delwin(input_win);
   endwin();
   history_free(&history);
+  lorebook_free(&lorebook);
   if (character_loaded) {
     character_free(&character);
   }

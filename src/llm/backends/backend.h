@@ -7,6 +7,7 @@
 #include "chat/history.h"
 #include "core/config.h"
 #include "llm/sampler.h"
+#include "lore/lorebook.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/time.h>
@@ -21,6 +22,7 @@ typedef struct {
   const Persona *persona;
   const SamplerSettings *samplers;
   const AuthorNote *author_note;
+  const Lorebook *lorebook;
 } LLMContext;
 
 typedef struct {
