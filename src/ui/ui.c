@@ -417,9 +417,9 @@ int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
     return -1;
 
   int subst_count = 0;
-  int total_display_lines = build_display_lines(
-      history, content_width, all_lines, max_display, edit, NULL, NULL, NULL,
-      &subst_count);
+  int total_display_lines =
+      build_display_lines(history, content_width, all_lines, max_display, edit,
+                          NULL, NULL, NULL, &subst_count);
 
   int msg_start_line = -1;
   int msg_end_line = -1;
