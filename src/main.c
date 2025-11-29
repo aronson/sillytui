@@ -2016,7 +2016,8 @@ int main(void) {
         continue;
       }
 
-      if (input_len == 0 || is_only_whitespace(input_buffer)) {
+      if ((input_len == 0 || is_only_whitespace(input_buffer)) &&
+          attachments.count == 0) {
         input_buffer[0] = '\0';
         input_len = 0;
         cursor_pos = 0;
@@ -2094,29 +2095,33 @@ int main(void) {
         }
       }
 
-      char *display_input = NULL;
+      char *msg_content = NULL;
 
       if (attachments.count > 0) {
         size_t display_len = strlen(input_buffer) + 1;
         for (int i = 0; i < attachments.count; i++) {
           display_len += strlen(attachments.items[i].filename) + 20;
         }
-        display_input = malloc(display_len);
-        if (display_input) {
+        msg_content = malloc(display_len);
+        if (msg_content) {
           size_t pos = 0;
           for (int i = 0; i < attachments.count; i++) {
-            pos += sprintf(display_input + pos, "[Attachment: %s]\n",
+            pos += sprintf(msg_content + pos, "[Attachment: %s]\n",
                            attachments.items[i].filename);
           }
           if (input_buffer[0])
-            strcpy(display_input + pos, input_buffer);
+            strcpy(msg_content + pos, input_buffer);
           else
-            display_input[pos > 0 ? pos - 1 : 0] = '\0';
+            msg_content[pos > 0 ? pos - 1 : 0] = '\0';
         }
         attachment_list_clear(&attachments);
+      } else {
+        msg_content = strdup(input_buffer);
       }
 
-      const char *msg_content = display_input ? display_input : input_buffer;
+      if (!msg_content) {
+        continue;
+      }
 
       input_buffer[0] = '\0';
       input_len = 0;
@@ -2132,14 +2137,14 @@ int main(void) {
       size_t msg_len = strlen(msg_content);
       char *user_line = malloc(msg_len + 6);
       if (!user_line) {
-        free(display_input);
+        free(msg_content);
         continue;
       }
       snprintf(user_line, msg_len + 6, "You: %s", msg_content);
 
       size_t user_msg_idx = history_add(&history, user_line);
       free(user_line);
-      free(display_input);
+      free(msg_content);
       if (user_msg_idx != SIZE_MAX) {
         ModelConfig *model = config_get_active(&models);
         if (model) {
