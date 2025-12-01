@@ -19,6 +19,7 @@ static void message_init(ChatMessage *msg) {
   msg->swipes = NULL;
   msg->reasoning = NULL;
   msg->reasoning_times = NULL;
+  msg->finish_reasons = NULL;
   msg->swipe_count = 0;
   msg->active_swipe = 0;
   msg->token_counts = NULL;
@@ -34,16 +35,20 @@ static void message_free(ChatMessage *msg) {
     free(msg->swipes[i]);
     if (msg->reasoning)
       free(msg->reasoning[i]);
+    if (msg->finish_reasons)
+      free(msg->finish_reasons[i]);
   }
   free(msg->swipes);
   free(msg->reasoning);
   free(msg->reasoning_times);
+  free(msg->finish_reasons);
   free(msg->token_counts);
   free(msg->gen_times);
   free(msg->output_tps);
   msg->swipes = NULL;
   msg->reasoning = NULL;
   msg->reasoning_times = NULL;
+  msg->finish_reasons = NULL;
   msg->token_counts = NULL;
   msg->gen_times = NULL;
   msg->output_tps = NULL;
@@ -191,7 +196,10 @@ size_t history_add_swipe(ChatHistory *history, size_t msg_index,
       realloc(msg->gen_times, (msg->swipe_count + 1) * sizeof(double));
   double *new_tps =
       realloc(msg->output_tps, (msg->swipe_count + 1) * sizeof(double));
-  if (!new_swipes || !new_tokens || !new_times || !new_tps) {
+  char **new_finish_reasons =
+      realloc(msg->finish_reasons, (msg->swipe_count + 1) * sizeof(char *));
+  if (!new_swipes || !new_tokens || !new_times || !new_tps ||
+      !new_finish_reasons) {
     if (new_swipes)
       msg->swipes = new_swipes;
     if (new_tokens)
@@ -200,12 +208,15 @@ size_t history_add_swipe(ChatHistory *history, size_t msg_index,
       msg->gen_times = new_times;
     if (new_tps)
       msg->output_tps = new_tps;
+    if (new_finish_reasons)
+      msg->finish_reasons = new_finish_reasons;
     return SIZE_MAX;
   }
   msg->swipes = new_swipes;
   msg->token_counts = new_tokens;
   msg->gen_times = new_times;
   msg->output_tps = new_tps;
+  msg->finish_reasons = new_finish_reasons;
 
   msg->swipes[msg->swipe_count] = dup_string(content);
   if (!msg->swipes[msg->swipe_count])
@@ -214,6 +225,7 @@ size_t history_add_swipe(ChatHistory *history, size_t msg_index,
   msg->token_counts[msg->swipe_count] = 0;
   msg->gen_times[msg->swipe_count] = 0.0;
   msg->output_tps[msg->swipe_count] = 0.0;
+  msg->finish_reasons[msg->swipe_count] = NULL;
   msg->swipe_count++;
   msg->active_swipe = msg->swipe_count - 1;
   return msg->active_swipe;
@@ -251,11 +263,14 @@ bool history_delete(ChatHistory *history, size_t index) {
   ChatMessage *msg = &history->messages[index];
   for (size_t i = 0; i < msg->swipe_count; i++) {
     free(msg->swipes[i]);
+    if (msg->finish_reasons)
+      free(msg->finish_reasons[i]);
   }
   free(msg->swipes);
   free(msg->token_counts);
   free(msg->gen_times);
   free(msg->output_tps);
+  free(msg->finish_reasons);
 
   for (size_t i = index; i < history->count - 1; i++) {
     history->messages[i] = history->messages[i + 1];
@@ -432,4 +447,33 @@ double history_get_reasoning_time(const ChatHistory *history, size_t msg_index,
   if (swipe_index >= msg->swipe_count || !msg->reasoning_times)
     return 0;
   return msg->reasoning_times[swipe_index];
+}
+
+void history_set_finish_reason(ChatHistory *history, size_t msg_index,
+                               size_t swipe_index, const char *finish_reason) {
+  if (!history || msg_index >= history->count)
+    return;
+  ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count)
+    return;
+
+  if (!msg->finish_reasons) {
+    msg->finish_reasons = calloc(msg->swipe_count, sizeof(char *));
+    if (!msg->finish_reasons)
+      return;
+  }
+
+  free(msg->finish_reasons[swipe_index]);
+  msg->finish_reasons[swipe_index] =
+      finish_reason ? strdup(finish_reason) : NULL;
+}
+
+const char *history_get_finish_reason(const ChatHistory *history,
+                                      size_t msg_index, size_t swipe_index) {
+  if (!history || msg_index >= history->count)
+    return NULL;
+  const ChatMessage *msg = &history->messages[msg_index];
+  if (swipe_index >= msg->swipe_count || !msg->finish_reasons)
+    return NULL;
+  return msg->finish_reasons[swipe_index];
 }

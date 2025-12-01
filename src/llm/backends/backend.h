@@ -42,6 +42,7 @@ typedef struct {
   double elapsed_ms;
   double output_tps;
   double reasoning_ms;
+  char finish_reason[32];
 } LLMResponse;
 
 typedef void (*LLMStreamCallback)(const char *chunk, void *userdata);

@@ -12,6 +12,7 @@ typedef struct {
   char **swipes;
   char **reasoning;
   double *reasoning_times;
+  char **finish_reasons;
   size_t swipe_count;
   size_t active_swipe;
   int *token_counts;
@@ -64,6 +65,11 @@ const char *history_get_reasoning(const ChatHistory *history, size_t msg_index,
                                   size_t swipe_index);
 double history_get_reasoning_time(const ChatHistory *history, size_t msg_index,
                                   size_t swipe_index);
+
+void history_set_finish_reason(ChatHistory *history, size_t msg_index,
+                               size_t swipe_index, const char *finish_reason);
+const char *history_get_finish_reason(const ChatHistory *history,
+                                      size_t msg_index, size_t swipe_index);
 
 size_t history_add_with_role(ChatHistory *history, const char *message,
                              MessageRole role);

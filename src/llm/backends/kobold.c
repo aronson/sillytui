@@ -381,6 +381,16 @@ static void kobold_parse_stream(StreamCtx *ctx, const char *line) {
   if (!choices)
     return;
 
+  char *finish_reason = find_json_string(choices, "finish_reason");
+  if (finish_reason && finish_reason[0] && ctx->resp) {
+    strncpy(ctx->resp->finish_reason, finish_reason,
+            sizeof(ctx->resp->finish_reason) - 1);
+    ctx->resp->finish_reason[sizeof(ctx->resp->finish_reason) - 1] = '\0';
+    free(finish_reason);
+  } else if (finish_reason) {
+    free(finish_reason);
+  }
+
   const char *delta = strstr(choices, "\"delta\"");
   if (!delta)
     return;

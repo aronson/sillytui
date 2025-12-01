@@ -416,6 +416,10 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
       history_set_reasoning(history, msg_index, active_swipe,
                             ctx.reasoning_buffer, resp.reasoning_ms);
     }
+    if (resp.finish_reason[0]) {
+      history_set_finish_reason(history, msg_index, active_swipe,
+                                resp.finish_reason);
+    }
   }
 
   *selected_msg = MSG_SELECT_NONE;
@@ -1710,6 +1714,10 @@ int main(void) {
                   history_set_reasoning(&history, selected_msg, active_swipe,
                                         ctx.reasoning_buffer,
                                         resp.reasoning_ms);
+                }
+                if (resp.finish_reason[0]) {
+                  history_set_finish_reason(&history, selected_msg,
+                                            active_swipe, resp.finish_reason);
                 }
               }
 

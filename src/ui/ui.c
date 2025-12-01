@@ -703,8 +703,10 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
         double gen_time = history_get_gen_time(history, dl->msg_index, active);
         double output_tps =
             history_get_output_tps(history, dl->msg_index, active);
-        if (tokens > 0 || gen_time > 0 || output_tps > 0) {
-          char stats_str[96];
+        const char *finish_reason =
+            history_get_finish_reason(history, dl->msg_index, active);
+        if (tokens > 0 || gen_time > 0 || output_tps > 0 || finish_reason) {
+          char stats_str[128];
           int pos = 0;
 
           if (tokens > 0) {
@@ -727,6 +729,13 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
               pos += snprintf(stats_str + pos, sizeof(stats_str) - pos,
                               " %.0fms", gen_time);
             }
+          }
+
+          if (finish_reason && finish_reason[0]) {
+            if (pos > 0)
+              pos += snprintf(stats_str + pos, sizeof(stats_str) - pos, " │");
+            pos += snprintf(stats_str + pos, sizeof(stats_str) - pos,
+                            " finish: %s", finish_reason);
           }
 
           int hint_pair = is_selected ? COLOR_PAIR_HINT_SEL : COLOR_PAIR_HINT;
