@@ -422,6 +422,12 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
                 "LLM request completed: %d tokens, %.1fms, %.1f tok/s",
                 resp.completion_tokens, resp.elapsed_ms, resp.output_tps);
     size_t active_swipe = history_get_active_swipe(history, msg_index);
+    size_t swipe_count = history_get_swipe_count(history, msg_index);
+    log_message(LOG_DEBUG, __FILE__, __LINE__,
+                "Saving metrics for first msg %zu: active_swipe=%zu, "
+                "swipe_count=%zu, tokens=%d, time=%.1fms, tps=%.1f",
+                msg_index, active_swipe, swipe_count, resp.completion_tokens,
+                resp.elapsed_ms, resp.output_tps);
     history_set_token_count(history, msg_index, active_swipe,
                             resp.completion_tokens);
     history_set_gen_time(history, msg_index, active_swipe, resp.elapsed_ms);
@@ -431,9 +437,24 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
                             ctx.reasoning_buffer, resp.reasoning_ms);
     }
     if (resp.finish_reason[0]) {
+      log_message(LOG_DEBUG, __FILE__, __LINE__,
+                  "Setting finish_reason for first msg swipe %zu: %s",
+                  active_swipe, resp.finish_reason);
       history_set_finish_reason(history, msg_index, active_swipe,
                                 resp.finish_reason);
     }
+    // Verify what was saved
+    int saved_tokens =
+        history_get_token_count(history, msg_index, active_swipe);
+    double saved_time = history_get_gen_time(history, msg_index, active_swipe);
+    double saved_tps = history_get_output_tps(history, msg_index, active_swipe);
+    const char *saved_finish =
+        history_get_finish_reason(history, msg_index, active_swipe);
+    log_message(LOG_DEBUG, __FILE__, __LINE__,
+                "Verified saved metrics for first msg swipe %zu: tokens=%d, "
+                "time=%.1fms, tps=%.1f, finish=%s",
+                active_swipe, saved_tokens, saved_time, saved_tps,
+                saved_finish ? saved_finish : "NULL");
   }
 
   *selected_msg = MSG_SELECT_NONE;
@@ -505,9 +526,24 @@ static bool handle_global_keys(int ch, bool *running, Modal *modal,
   if (modal && modal_is_open(modal))
     return false;
 
+  // Toggle fullscreen console with Ctrl+K (11)
+  if (ch == 11) {
+    if (console) {
+      console_toggle_fullscreen(console);
+      if (console_is_fullscreen(console)) {
+        log_message(LOG_INFO, __FILE__, __LINE__,
+                    "Console fullscreen mode enabled");
+      } else {
+        log_message(LOG_INFO, __FILE__, __LINE__,
+                    "Console fullscreen mode disabled");
+      }
+      return true;
+    }
+  }
+
   // Toggle console with Ctrl+L (12) or F12
   if (ch == 12 || ch == KEY_F(12)) {
-    if (console) {
+    if (console && !console_is_fullscreen(console)) {
       bool was_visible = console_is_visible(console);
       console_toggle(console);
       log_message(LOG_INFO, __FILE__, __LINE__, "Console %s",
@@ -1202,6 +1238,70 @@ int main(void) {
   }
 
   while (running) {
+    // Handle fullscreen console mode
+    if (console_is_fullscreen(&console)) {
+      if (console.needs_redraw) {
+        ui_draw_console_fullscreen(&console);
+      }
+
+      wtimeout(stdscr, 100);
+      int ch = wgetch(stdscr);
+      wtimeout(stdscr, -1);
+
+      if (ch == ERR) {
+        continue;
+      }
+
+      // Handle fullscreen console keys
+      if (ch == 27 || ch == 11) { // ESC or Ctrl+K to exit
+        console_toggle_fullscreen(&console);
+        log_message(LOG_INFO, __FILE__, __LINE__,
+                    "Exited console fullscreen mode");
+        touchwin(chat_win);
+        touchwin(input_win);
+        ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
+                     get_user_display_name(&persona),
+                     get_bot_display_name(&character, character_loaded), false);
+        ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos,
+                                   input_focused, input_scroll_line, false,
+                                   &attachments);
+        continue;
+      }
+
+      // Scrolling in fullscreen console
+      if (ch == KEY_UP || ch == 'k') {
+        console_scroll(&console, 1);
+        ui_draw_console_fullscreen(&console);
+        continue;
+      } else if (ch == KEY_DOWN || ch == 'j') {
+        console_scroll(&console, -1);
+        ui_draw_console_fullscreen(&console);
+        continue;
+      } else if (ch == KEY_PPAGE) {
+        int h, w;
+        getmaxyx(stdscr, h, w);
+        console_scroll(&console, h - 2);
+        ui_draw_console_fullscreen(&console);
+        continue;
+      } else if (ch == KEY_NPAGE) {
+        int h, w;
+        getmaxyx(stdscr, h, w);
+        console_scroll(&console, -(h - 2));
+        ui_draw_console_fullscreen(&console);
+        continue;
+      } else if (ch == KEY_HOME || ch == 'g') {
+        console_scroll_to_top(&console);
+        ui_draw_console_fullscreen(&console);
+        continue;
+      } else if (ch == KEY_END || ch == 'G') {
+        console_scroll_to_bottom(&console);
+        ui_draw_console_fullscreen(&console);
+        continue;
+      }
+
+      continue;
+    }
+
     user_disp = get_user_display_name(&persona);
     bot_disp = get_bot_display_name(&character, character_loaded);
 
@@ -1904,7 +2004,17 @@ int main(void) {
 
             log_message(LOG_INFO, __FILE__, __LINE__,
                         "Regenerating swipe for message %d", selected_msg);
-            history_add_swipe(&history, selected_msg, "Bot: *thinking*");
+            size_t new_swipe_index =
+                history_add_swipe(&history, selected_msg, "Bot: *thinking*");
+            log_message(LOG_DEBUG, __FILE__, __LINE__,
+                        "history_add_swipe returned swipe index: %zu "
+                        "(swipe_count: %zu)",
+                        new_swipe_index,
+                        history_get_swipe_count(&history, selected_msg));
+            size_t active_after_add =
+                history_get_active_swipe(&history, selected_msg);
+            log_message(LOG_DEBUG, __FILE__, __LINE__,
+                        "Active swipe after add_swipe: %zu", active_after_add);
             ui_draw_chat(chat_win, &history, selected_msg,
                          get_model_name(&models), user_disp, bot_disp, false);
 
@@ -1958,23 +2068,50 @@ int main(void) {
                             "%.1f tok/s",
                             resp.completion_tokens, resp.elapsed_ms,
                             resp.output_tps);
+                // Use ctx.msg_index instead of selected_msg, as selected_msg
+                // may have changed
+                size_t msg_idx = ctx.msg_index;
                 size_t active_swipe =
-                    history_get_active_swipe(&history, selected_msg);
-                history_set_token_count(&history, selected_msg, active_swipe,
+                    history_get_active_swipe(&history, msg_idx);
+                size_t swipe_count = history_get_swipe_count(&history, msg_idx);
+                log_message(LOG_DEBUG, __FILE__, __LINE__,
+                            "Saving metrics for msg %zu: active_swipe=%zu, "
+                            "swipe_count=%zu, tokens=%d, time=%.1fms, tps=%.1f",
+                            msg_idx, active_swipe, swipe_count,
+                            resp.completion_tokens, resp.elapsed_ms,
+                            resp.output_tps);
+                history_set_token_count(&history, msg_idx, active_swipe,
                                         resp.completion_tokens);
-                history_set_gen_time(&history, selected_msg, active_swipe,
+                history_set_gen_time(&history, msg_idx, active_swipe,
                                      resp.elapsed_ms);
-                history_set_output_tps(&history, selected_msg, active_swipe,
+                history_set_output_tps(&history, msg_idx, active_swipe,
                                        resp.output_tps);
                 if (ctx.reasoning_len > 0) {
-                  history_set_reasoning(&history, selected_msg, active_swipe,
+                  history_set_reasoning(&history, msg_idx, active_swipe,
                                         ctx.reasoning_buffer,
                                         resp.reasoning_ms);
                 }
                 if (resp.finish_reason[0]) {
-                  history_set_finish_reason(&history, selected_msg,
-                                            active_swipe, resp.finish_reason);
+                  log_message(LOG_DEBUG, __FILE__, __LINE__,
+                              "Setting finish_reason for swipe %zu: %s",
+                              active_swipe, resp.finish_reason);
+                  history_set_finish_reason(&history, msg_idx, active_swipe,
+                                            resp.finish_reason);
                 }
+                // Verify what was saved
+                int saved_tokens =
+                    history_get_token_count(&history, msg_idx, active_swipe);
+                double saved_time =
+                    history_get_gen_time(&history, msg_idx, active_swipe);
+                double saved_tps =
+                    history_get_output_tps(&history, msg_idx, active_swipe);
+                const char *saved_finish =
+                    history_get_finish_reason(&history, msg_idx, active_swipe);
+                log_message(LOG_DEBUG, __FILE__, __LINE__,
+                            "Verified saved metrics for swipe %zu: tokens=%d, "
+                            "time=%.1fms, tps=%.1f, finish=%s",
+                            active_swipe, saved_tokens, saved_time, saved_tps,
+                            saved_finish ? saved_finish : "NULL");
               }
 
               free(ctx.buffer);

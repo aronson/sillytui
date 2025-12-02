@@ -1,5 +1,6 @@
 #include "ui/console.h"
 #include "core/time.h"
+#include <stdlib.h>
 #include <string.h>
 
 void console_init(ConsoleState *console) {
@@ -7,7 +8,32 @@ void console_init(ConsoleState *console) {
     return;
   memset(console, 0, sizeof(ConsoleState));
   console->auto_scroll = true;
-  console->min_level = LOG_INFO; // Show INFO, WARNING, ERROR by default
+
+  // Read log level from environment variable
+  const char *log_level_str = getenv("SILLYTUI_LOG_LEVEL");
+  if (log_level_str) {
+    if (strcmp(log_level_str, "DEBUG") == 0 ||
+        strcmp(log_level_str, "debug") == 0) {
+      console->min_level = LOG_DEBUG;
+    } else if (strcmp(log_level_str, "INFO") == 0 ||
+               strcmp(log_level_str, "info") == 0) {
+      console->min_level = LOG_INFO;
+    } else if (strcmp(log_level_str, "WARNING") == 0 ||
+               strcmp(log_level_str, "warning") == 0 ||
+               strcmp(log_level_str, "WARN") == 0 ||
+               strcmp(log_level_str, "warn") == 0) {
+      console->min_level = LOG_WARNING;
+    } else if (strcmp(log_level_str, "ERROR") == 0 ||
+               strcmp(log_level_str, "error") == 0) {
+      console->min_level = LOG_ERROR;
+    } else {
+      // Invalid value, default to INFO
+      console->min_level = LOG_INFO;
+    }
+  } else {
+    // No env var set, default to INFO
+    console->min_level = LOG_INFO;
+  }
 }
 
 void console_free(ConsoleState *console) {
@@ -71,7 +97,12 @@ void console_add_log(ConsoleState *console, LogLevel level, const char *file,
 void console_toggle(ConsoleState *console) {
   if (!console)
     return;
-  console->visible = !console->visible;
+  if (console->fullscreen) {
+    console->fullscreen = false;
+    console->visible = false;
+  } else {
+    console->visible = !console->visible;
+  }
   if (console->visible) {
     console_scroll_to_bottom(console);
   }
@@ -109,6 +140,16 @@ void console_scroll(ConsoleState *console, int direction) {
     console->auto_scroll = (console->scroll_offset == 0);
 }
 
+void console_scroll_to_top(ConsoleState *console) {
+  if (!console)
+    return;
+  int max_scroll = (int)console->count - 1;
+  if (max_scroll < 0)
+    max_scroll = 0;
+  console->scroll_offset = max_scroll;
+  console->auto_scroll = false;
+}
+
 void console_scroll_to_bottom(ConsoleState *console) {
   if (!console)
     return;
@@ -129,4 +170,21 @@ void console_set_min_level(ConsoleState *console, LogLevel min_level) {
   if (!console)
     return;
   console->min_level = min_level;
+}
+
+void console_toggle_fullscreen(ConsoleState *console) {
+  if (!console)
+    return;
+  console->fullscreen = !console->fullscreen;
+  if (console->fullscreen) {
+    console->visible = true;
+    console->auto_scroll = true;
+    console_scroll_to_bottom(console);
+  }
+}
+
+bool console_is_fullscreen(const ConsoleState *console) {
+  if (!console)
+    return false;
+  return console->fullscreen;
 }

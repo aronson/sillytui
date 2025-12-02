@@ -1,6 +1,7 @@
 #include "ui/ui.h"
 #include "chat/chat.h"
 #include "chat/history.h"
+#include "core/log.h"
 #include "core/macros.h"
 #include "ui/console.h"
 #include "ui/markdown.h"
@@ -737,6 +738,14 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
             history_get_output_tps(history, dl->msg_index, active);
         const char *finish_reason =
             history_get_finish_reason(history, dl->msg_index, active);
+        // Log metrics retrieval for debugging swipes
+        if (swipe_count > 1) {
+          log_message(LOG_DEBUG, __FILE__, __LINE__,
+                      "UI: msg %d, swipe %zu/%zu: tokens=%d, time=%.1fms, "
+                      "tps=%.1f, finish=%s",
+                      dl->msg_index, active, swipe_count, tokens, gen_time,
+                      output_tps, finish_reason ? finish_reason : "NULL");
+        }
         if (tokens > 0 || gen_time > 0 || output_tps > 0 || finish_reason) {
           char stats_str[128];
           int pos = 0;
@@ -1925,4 +1934,116 @@ void ui_draw_console(WINDOW *console_win, ConsoleState *console) {
   }
 
   wrefresh(console_win);
+}
+
+void ui_draw_console_fullscreen(ConsoleState *console) {
+  if (!console || !console->fullscreen)
+    return;
+
+  console->needs_redraw = false;
+
+  int h, w;
+  getmaxyx(stdscr, h, w);
+  if (h < 2 || w < 2)
+    return;
+
+  werase(stdscr);
+
+  if (g_ui_colors)
+    wattron(stdscr, COLOR_PAIR(COLOR_PAIR_BORDER));
+  box(stdscr, 0, 0);
+  if (g_ui_colors)
+    wattroff(stdscr, COLOR_PAIR(COLOR_PAIR_BORDER));
+
+  if (g_ui_colors)
+    wattron(stdscr, COLOR_PAIR(COLOR_PAIR_TITLE) | A_BOLD);
+  mvwaddstr(stdscr, 0, 2, " Console (Fullscreen) - ESC to exit, ↑↓ to scroll ");
+  if (g_ui_colors)
+    wattroff(stdscr, COLOR_PAIR(COLOR_PAIR_TITLE) | A_BOLD);
+
+  int y = 1;
+  int max_y = h - 2;
+  if (max_y < 1)
+    max_y = 1;
+
+  int start_index = 0;
+  if (console->count > 0) {
+    int max_scroll = (int)console->count - max_y;
+    if (max_scroll < 0)
+      max_scroll = 0;
+    int scroll = console->scroll_offset;
+    if (scroll > max_scroll)
+      scroll = max_scroll;
+    start_index = (int)console->count - max_y - scroll;
+    if (start_index < 0)
+      start_index = 0;
+  }
+
+  for (int i = 0; i < max_y && (start_index + i) < (int)console->count; i++) {
+    size_t idx = (size_t)(start_index + i);
+    size_t ring_idx;
+    if (console->count < CONSOLE_MAX_ENTRIES) {
+      ring_idx = idx;
+    } else {
+      ring_idx = (console->head + idx) % CONSOLE_MAX_ENTRIES;
+    }
+    const ConsoleLogEntry *entry = &console->entries[ring_idx];
+
+    int color_pair = COLOR_PAIR_HINT;
+    const char *level_str = "?";
+    switch (entry->level) {
+    case LOG_DEBUG:
+      color_pair = COLOR_PAIR_HINT;
+      level_str = "DBG";
+      break;
+    case LOG_INFO:
+      color_pair = COLOR_PAIR_STATUS;
+      level_str = "INF";
+      break;
+    case LOG_WARNING:
+      color_pair = COLOR_PAIR_TOKEN3;
+      level_str = "WRN";
+      break;
+    case LOG_ERROR:
+      color_pair = COLOR_PAIR_USER;
+      level_str = "ERR";
+      break;
+    }
+
+    if (g_ui_colors)
+      wattron(stdscr, COLOR_PAIR(color_pair));
+
+    char line[512];
+    int pos =
+        snprintf(line, sizeof(line), "[%s] [%s] %s:%d %s", entry->timestamp,
+                 level_str, entry->file, entry->line, entry->message);
+
+    if (pos >= w - 4) {
+      line[w - 7] = '.';
+      line[w - 6] = '.';
+      line[w - 5] = '.';
+      line[w - 4] = '\0';
+    }
+
+    mvwaddstr(stdscr, y, 1, line);
+    if (g_ui_colors)
+      wattroff(stdscr, COLOR_PAIR(color_pair));
+
+    y++;
+  }
+
+  if (console->count > (size_t)max_y) {
+    if (g_ui_colors)
+      wattron(stdscr, COLOR_PAIR(COLOR_PAIR_HINT));
+    if (console->scroll_offset > 0) {
+      mvwaddstr(stdscr, 0, w - 2, "▲");
+    }
+    if (console->scroll_offset < (int)console->count - max_y) {
+      mvwaddstr(stdscr, h - 1, w - 2, "▼");
+    }
+    if (g_ui_colors)
+      wattroff(stdscr, COLOR_PAIR(COLOR_PAIR_HINT));
+  }
+
+  wrefresh(stdscr);
 }
