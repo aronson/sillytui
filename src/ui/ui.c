@@ -539,8 +539,56 @@ int ui_get_total_lines(WINDOW *chat_win, const ChatHistory *history) {
   return total;
 }
 
+int ui_get_msg_height(WINDOW *chat_win, const ChatHistory *history,
+                      int selected_msg, const InPlaceEdit *edit) {
+  if (selected_msg < 0 || history->count == 0)
+    return -1;
+
+  int height, width;
+  getmaxyx(chat_win, height, width);
+  int usable_lines = height - 2;
+  int content_width = width - 4;
+  if (usable_lines <= 0 || content_width <= 0)
+    return -1;
+
+  int max_display = (int)history->count * 100 + 100;
+  DisplayLine *all_lines = malloc(sizeof(DisplayLine) * max_display);
+  if (!all_lines)
+    return -1;
+
+  int subst_count = 0;
+  int total_display_lines =
+      build_display_lines(history, content_width, all_lines, max_display, edit,
+                          NULL, NULL, NULL, &subst_count);
+
+  int msg_start_line = -1;
+  int msg_end_line = -1;
+  for (int i = 0; i < total_display_lines; i++) {
+    if (all_lines[i].msg_index == selected_msg) {
+      if (msg_start_line < 0)
+        msg_start_line = i;
+      msg_end_line = i;
+    }
+  }
+
+  free(all_lines);
+
+  if (msg_start_line < 0)
+    return -1;
+
+  return msg_end_line - msg_start_line + 1;
+}
+
 int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
                              int selected_msg, const InPlaceEdit *edit) {
+  return ui_get_msg_scroll_offset_with_line_offset(chat_win, history,
+                                                   selected_msg, 0, edit);
+}
+
+int ui_get_msg_scroll_offset_with_line_offset(WINDOW *chat_win,
+                                              const ChatHistory *history,
+                                              int selected_msg, int line_offset,
+                                              const InPlaceEdit *edit) {
   if (selected_msg < 0 || history->count == 0)
     return -1;
 
@@ -584,8 +632,16 @@ int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
   int target_scroll;
 
   if (msg_height >= usable_lines) {
-    target_scroll = msg_start_line;
+    // Long message: use line_offset to scroll within it
+    target_scroll = msg_start_line + line_offset;
+    // Clamp to message boundaries
+    int max_line_offset = msg_height - usable_lines;
+    if (line_offset > max_line_offset)
+      target_scroll = msg_start_line + max_line_offset;
+    if (target_scroll < msg_start_line)
+      target_scroll = msg_start_line;
   } else {
+    // Short message: center it
     target_scroll = msg_start_line - (usable_lines - msg_height) / 2;
   }
 
@@ -601,6 +657,26 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
                      int selected_msg, const char *model_name,
                      const char *user_name, const char *bot_name,
                      bool show_edit_hints, bool move_mode, InPlaceEdit *edit) {
+  ui_draw_chat_ex_with_offset(chat_win, history, selected_msg, 0, model_name,
+                              user_name, bot_name, show_edit_hints, move_mode,
+                              edit);
+}
+
+void ui_draw_chat_ex_with_offset(WINDOW *chat_win, const ChatHistory *history,
+                                 int selected_msg, int msg_line_offset,
+                                 const char *model_name, const char *user_name,
+                                 const char *bot_name, bool show_edit_hints,
+                                 bool move_mode, InPlaceEdit *edit) {
+  ui_draw_chat_ex_with_offset_and_mode(
+      chat_win, history, selected_msg, msg_line_offset, false, model_name,
+      user_name, bot_name, show_edit_hints, move_mode, edit);
+}
+
+void ui_draw_chat_ex_with_offset_and_mode(
+    WINDOW *chat_win, const ChatHistory *history, int selected_msg,
+    int msg_line_offset, bool scroll_mode, const char *model_name,
+    const char *user_name, const char *bot_name, bool show_edit_hints,
+    bool move_mode, InPlaceEdit *edit) {
   if (!user_name || !user_name[0])
     user_name = "You";
   if (!bot_name || !bot_name[0])
@@ -635,8 +711,22 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
   } else if (show_edit_hints && selected_msg >= 0) {
     if (g_ui_colors)
       wattron(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
-    mvwaddstr(chat_win, height - 1, 3,
-              " e:edit  d:delete  m:move  Enter:deselect ");
+    int msg_height = ui_get_msg_height(chat_win, history, selected_msg, edit);
+    int usable_lines = height - 2;
+    bool can_scroll = (msg_height > usable_lines);
+    if (can_scroll) {
+      if (scroll_mode) {
+        mvwaddstr(chat_win, height - 1, 3,
+                  " [SCROLL] Tab:select  ↑/↓:scroll  e:edit  d:delete  m:move  "
+                  "Enter:deselect ");
+      } else {
+        mvwaddstr(chat_win, height - 1, 3,
+                  " Tab:scroll  e:edit  d:delete  m:move  Enter:deselect ");
+      }
+    } else {
+      mvwaddstr(chat_win, height - 1, 3,
+                " e:edit  d:delete  m:move  Enter:deselect ");
+    }
     if (g_ui_colors)
       wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
   }
@@ -667,8 +757,8 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
 
   int scroll_offset;
   if (selected_msg >= 0 && selected_msg < (int)history->count) {
-    scroll_offset =
-        ui_get_msg_scroll_offset(chat_win, history, selected_msg, edit);
+    scroll_offset = ui_get_msg_scroll_offset_with_line_offset(
+        chat_win, history, selected_msg, msg_line_offset, edit);
     if (scroll_offset < 0)
       scroll_offset = max_scroll;
   } else {

@@ -106,6 +106,16 @@ void ui_draw_chat_ex(WINDOW *chat_win, const ChatHistory *history,
                      int selected_msg, const char *model_name,
                      const char *user_name, const char *bot_name,
                      bool show_edit_hints, bool move_mode, InPlaceEdit *edit);
+void ui_draw_chat_ex_with_offset(WINDOW *chat_win, const ChatHistory *history,
+                                 int selected_msg, int msg_line_offset,
+                                 const char *model_name, const char *user_name,
+                                 const char *bot_name, bool show_edit_hints,
+                                 bool move_mode, InPlaceEdit *edit);
+void ui_draw_chat_ex_with_offset_and_mode(
+    WINDOW *chat_win, const ChatHistory *history, int selected_msg,
+    int msg_line_offset, bool scroll_mode, const char *model_name,
+    const char *user_name, const char *bot_name, bool show_edit_hints,
+    bool move_mode, InPlaceEdit *edit);
 #define ui_draw_chat(w, h, s, m, u, b, e)                                      \
   ui_draw_chat_ex(w, h, s, m, u, b, e, false, NULL)
 void ui_draw_input_multiline_ex(WINDOW *input_win, const char *buffer,
@@ -117,6 +127,12 @@ void ui_draw_input_multiline_ex(WINDOW *input_win, const char *buffer,
 int ui_get_total_lines(WINDOW *chat_win, const ChatHistory *history);
 int ui_get_msg_scroll_offset(WINDOW *chat_win, const ChatHistory *history,
                              int selected_msg, const InPlaceEdit *edit);
+int ui_get_msg_scroll_offset_with_line_offset(WINDOW *chat_win,
+                                              const ChatHistory *history,
+                                              int selected_msg, int line_offset,
+                                              const InPlaceEdit *edit);
+int ui_get_msg_height(WINDOW *chat_win, const ChatHistory *history,
+                      int selected_msg, const InPlaceEdit *edit);
 InputCursorPos ui_cursor_to_line_col(const char *buffer, int cursor_pos,
                                      int text_width);
 int ui_line_col_to_cursor(const char *buffer, int line, int col,

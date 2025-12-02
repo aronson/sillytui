@@ -1185,6 +1185,10 @@ int main(void) {
   int cursor_pos = 0;
   int input_scroll_line = 0;
   int selected_msg = MSG_SELECT_NONE;
+  int msg_line_offset = 0; // Scroll offset within the selected message
+  int last_selected_msg = MSG_SELECT_NONE; // Track when message changes
+  bool scroll_mode =
+      false; // true = scroll within message, false = select messages
   bool input_focused = true;
   bool move_mode = false;
   int last_input_len = 0;
@@ -1805,12 +1809,46 @@ int main(void) {
       } else if (input_focused) {
         attachments.selected = -1;
         selected_msg = (int)history.count - 1;
+        msg_line_offset = 0;
+        scroll_mode = false;
+        last_selected_msg = selected_msg;
         input_focused = false;
+        ui_draw_chat_ex_with_offset_and_mode(
+            chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+            get_model_name(&models), user_disp, bot_disp, !input_focused, false,
+            NULL);
+      } else if (scroll_mode && selected_msg >= 0) {
+        // Scroll mode: scroll within the current message
+        int msg_height =
+            ui_get_msg_height(chat_win, &history, selected_msg, NULL);
+        int usable_lines = getmaxy(chat_win) - 2;
+        if (msg_height > usable_lines && msg_line_offset > 0) {
+          msg_line_offset--;
+          ui_draw_chat_ex_with_offset_and_mode(
+              chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+              get_model_name(&models), user_disp, bot_disp, !input_focused,
+              false, NULL);
+        }
       } else if (selected_msg > 0) {
+        // Selection mode: move to previous message
         selected_msg--;
+        msg_line_offset = 0;
+        scroll_mode = false;
+        // Reset offset when message changes
+        if (selected_msg != last_selected_msg) {
+          last_selected_msg = selected_msg;
+        }
+        ui_draw_chat_ex_with_offset_and_mode(
+            chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+            get_model_name(&models), user_disp, bot_disp, !input_focused, false,
+            NULL);
+      } else if (selected_msg == 0) {
+        // Already on first message, stay here
+        ui_draw_chat_ex_with_offset_and_mode(
+            chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+            get_model_name(&models), user_disp, bot_disp, !input_focused, false,
+            NULL);
       }
-      ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                   user_disp, bot_disp, !input_focused);
       ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos,
                                  input_focused, input_scroll_line, false,
                                  &attachments);
@@ -1912,19 +1950,110 @@ int main(void) {
           chat_auto_save_with_note(&history, &author_note, current_chat_id,
                                    CHAT_ID_MAX, current_char_path, char_name);
         }
+      } else if (scroll_mode && selected_msg >= 0) {
+        // Scroll mode: scroll within the current message
+        int msg_height =
+            ui_get_msg_height(chat_win, &history, selected_msg, NULL);
+        int usable_lines = getmaxy(chat_win) - 2;
+        int max_offset =
+            msg_height > usable_lines ? msg_height - usable_lines : 0;
+        if (msg_height > usable_lines && msg_line_offset < max_offset) {
+          msg_line_offset++;
+          ui_draw_chat_ex_with_offset_and_mode(
+              chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+              get_model_name(&models), user_disp, bot_disp, !input_focused,
+              false, NULL);
+        }
       } else if (selected_msg < (int)history.count - 1) {
+        // Selection mode: move to next message
         selected_msg++;
+        msg_line_offset = 0;
+        scroll_mode = false;
+        // Reset offset when message changes
+        if (selected_msg != last_selected_msg) {
+          last_selected_msg = selected_msg;
+        }
+        ui_draw_chat_ex_with_offset_and_mode(
+            chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+            get_model_name(&models), user_disp, bot_disp, !input_focused, false,
+            NULL);
       } else {
         selected_msg = MSG_SELECT_NONE;
+        msg_line_offset = 0;
+        scroll_mode = false;
         input_focused = true;
         if (attachments.count > 0)
           attachments.selected = 0;
+        ui_draw_chat_ex_with_offset_and_mode(
+            chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+            get_model_name(&models), user_disp, bot_disp, !input_focused, false,
+            NULL);
       }
-      ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
-                   user_disp, bot_disp, !input_focused);
       ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos,
                                  input_focused, input_scroll_line, false,
                                  &attachments);
+      continue;
+    }
+
+    // Page Up/Down for scrolling within long messages
+    if (ch == KEY_PPAGE) {
+      if (selected_msg >= 0 && !input_focused && !in_place_edit.active) {
+        int msg_height =
+            ui_get_msg_height(chat_win, &history, selected_msg, NULL);
+        int usable_lines = getmaxy(chat_win) - 2;
+        if (msg_height > usable_lines) {
+          // Scroll up by half screen
+          msg_line_offset -= usable_lines / 2;
+          if (msg_line_offset < 0)
+            msg_line_offset = 0;
+          ui_draw_chat_ex_with_offset_and_mode(
+              chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+              get_model_name(&models), user_disp, bot_disp, !input_focused,
+              false, NULL);
+        }
+      }
+      continue;
+    }
+
+    if (ch == KEY_NPAGE) {
+      if (selected_msg >= 0 && !input_focused && !in_place_edit.active) {
+        int msg_height =
+            ui_get_msg_height(chat_win, &history, selected_msg, NULL);
+        int usable_lines = getmaxy(chat_win) - 2;
+        if (msg_height > usable_lines) {
+          // Scroll down by half screen
+          int max_offset = msg_height - usable_lines;
+          msg_line_offset += usable_lines / 2;
+          if (msg_line_offset > max_offset)
+            msg_line_offset = max_offset;
+          ui_draw_chat_ex_with_offset_and_mode(
+              chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+              get_model_name(&models), user_disp, bot_disp, !input_focused,
+              false, NULL);
+        }
+      }
+      continue;
+    }
+
+    // Tab to toggle between scroll mode and selection mode
+    if (ch == '\t' || ch == KEY_BTAB) {
+      if (!input_focused && !in_place_edit.active && selected_msg >= 0) {
+        int msg_height =
+            ui_get_msg_height(chat_win, &history, selected_msg, NULL);
+        int usable_lines = getmaxy(chat_win) - 2;
+        // Only allow scroll mode if message is longer than screen
+        if (msg_height > usable_lines) {
+          scroll_mode = !scroll_mode;
+          if (scroll_mode) {
+            // Entering scroll mode - reset offset to top
+            msg_line_offset = 0;
+          }
+          ui_draw_chat_ex_with_offset_and_mode(
+              chat_win, &history, selected_msg, msg_line_offset, scroll_mode,
+              get_model_name(&models), user_disp, bot_disp, !input_focused,
+              false, NULL);
+        }
+      }
       continue;
     }
 
