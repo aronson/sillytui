@@ -17,11 +17,13 @@
 #include "chat/chat.h"
 #include "chat/history.h"
 #include "core/config.h"
+#include "core/log.h"
 #include "core/macros.h"
 #include "llm/llm.h"
 #include "llm/sampler.h"
 #include "lore/lorebook.h"
 #include "tokenizer/selector.h"
+#include "ui/console.h"
 #include "ui/markdown.h"
 #include "ui/modal.h"
 #include "ui/ui.h"
@@ -352,6 +354,8 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
   ModelConfig *model = config_get_active(mf);
   const char *model_name = get_model_name(mf);
   if (!model) {
+    log_message(LOG_WARNING, __FILE__, __LINE__,
+                "LLM reply requested but no model configured");
     history_add_with_role(history,
                           "Bot: *looks confused* \"No model configured. Use "
                           "/model set to add one.\"",
@@ -362,6 +366,8 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
     return;
   }
 
+  log_message(LOG_INFO, __FILE__, __LINE__, "Starting LLM request to %s",
+              model_name);
   size_t msg_index =
       history_add_with_role(history, "Bot: *thinking*", ROLE_ASSISTANT);
   if (msg_index == SIZE_MAX)
@@ -398,6 +404,8 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
                               reasoning_callback, progress_callback, &ctx);
 
   if (!resp.success) {
+    log_message(LOG_ERROR, __FILE__, __LINE__, "LLM request failed: %s",
+                resp.error);
     char err_msg[512];
     snprintf(err_msg, sizeof(err_msg), "Bot: *frowns* \"Error: %s\"",
              resp.error);
@@ -406,8 +414,13 @@ static void do_llm_reply(ChatHistory *history, WINDOW *chat_win,
     ui_draw_chat(chat_win, history, *selected_msg, model_name, user_name,
                  bot_name, false);
   } else if (ctx.buf_len == 0) {
+    log_message(LOG_WARNING, __FILE__, __LINE__,
+                "LLM request succeeded but returned empty response");
     history_update(history, msg_index, "Bot: *stays silent*");
   } else {
+    log_message(LOG_INFO, __FILE__, __LINE__,
+                "LLM request completed: %d tokens, %.1fms, %.1f tok/s",
+                resp.completion_tokens, resp.elapsed_ms, resp.output_tps);
     size_t active_swipe = history_get_active_swipe(history, msg_index);
     history_set_token_count(history, msg_index, active_swipe,
                             resp.completion_tokens);
@@ -472,12 +485,51 @@ static void update_tokenizer_from_model(ChatTokenizer *tokenizer,
   }
 }
 
+// Global console state pointer for log callback
+static ConsoleState *g_console_state = NULL;
+
+static void console_log_callback(LogLevel level, const char *file, int line,
+                                 const char *msg) {
+  if (g_console_state) {
+    console_add_log(g_console_state, level, file, line, msg);
+  }
+}
+
 static bool handle_global_keys(int ch, bool *running, Modal *modal,
-                               ModelsFile *models) {
-  (void)ch;
+                               ModelsFile *models, ConsoleState *console,
+                               UIWindows *ui_windows, int *input_height) {
   (void)running;
-  (void)modal;
   (void)models;
+
+  // Don't handle global keys when modal is open
+  if (modal && modal_is_open(modal))
+    return false;
+
+  // Toggle console with Ctrl+L (12) or F12
+  if (ch == 12 || ch == KEY_F(12)) {
+    if (console) {
+      bool was_visible = console_is_visible(console);
+      console_toggle(console);
+      log_message(LOG_INFO, __FILE__, __LINE__, "Console %s",
+                  was_visible ? "hidden" : "shown");
+      if (ui_windows && input_height) {
+        // Update console height based on visibility
+        if (console_is_visible(console)) {
+          int rows, cols;
+          getmaxyx(stdscr, rows, cols);
+          // Set console to ~25% of screen or 8 lines, whichever is smaller
+          ui_windows->console_height = (rows / 4) < 8 ? (rows / 4) : 8;
+          if (ui_windows->console_height < 5)
+            ui_windows->console_height = 5;
+        } else {
+          ui_windows->console_height = 0;
+        }
+        ui_layout_windows(ui_windows, *input_height);
+      }
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -487,6 +539,7 @@ static bool handle_slash_command(const char *input, Modal *modal,
                                  CharacterCard *character, Persona *persona,
                                  bool *char_loaded, AuthorNote *author_note,
                                  Lorebook *lorebook, ChatTokenizer *tokenizer) {
+  log_message(LOG_INFO, __FILE__, __LINE__, "Slash command: %s", input);
   if (strcmp(input, "/model set") == 0) {
     modal_open_model_set(modal);
     return true;
@@ -551,15 +604,21 @@ static bool handle_slash_command(const char *input, Modal *modal,
       }
 
       if (loaded) {
+        log_message(LOG_INFO, __FILE__, __LINE__, "Chat loaded: %s", chat_id);
         if (loaded_char_path[0]) {
           if (*char_loaded) {
             character_free(character);
           }
           if (character_load(character, loaded_char_path)) {
             *char_loaded = true;
+            log_message(LOG_INFO, __FILE__, __LINE__,
+                        "Character loaded from chat: %s", loaded_char_path);
             snprintf(current_char_path, CHAT_CHAR_PATH_MAX, "%s",
                      loaded_char_path);
           } else {
+            log_message(LOG_WARNING, __FILE__, __LINE__,
+                        "Failed to load character from chat: %s",
+                        loaded_char_path);
             *char_loaded = false;
             current_char_path[0] = '\0';
           }
@@ -571,6 +630,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
           current_char_path[0] = '\0';
         }
       } else {
+        log_message(LOG_WARNING, __FILE__, __LINE__, "Chat load failed: %s",
+                    chat_id[0] ? chat_id : "no ID");
         char err_msg[256];
         if (chat_id[0]) {
           snprintf(err_msg, sizeof(err_msg), "Chat '%s' not found for %s",
@@ -585,6 +646,7 @@ static bool handle_slash_command(const char *input, Modal *modal,
     return true;
   }
   if (strcmp(input, "/chat new") == 0) {
+    log_message(LOG_INFO, __FILE__, __LINE__, "Starting new chat");
     history_free(history);
     history_init(history);
     ui_reset_reasoning_state();
@@ -617,8 +679,11 @@ static bool handle_slash_command(const char *input, Modal *modal,
         path++;
     }
     if (path && *path) {
+      log_message(LOG_INFO, __FILE__, __LINE__, "Loading character: %s", path);
       if (character_load(character, path)) {
         *char_loaded = true;
+        log_message(LOG_INFO, __FILE__, __LINE__,
+                    "Character loaded successfully: %s", character->name);
         char *config_path = character_copy_to_config(path);
         if (config_path) {
           snprintf(current_char_path, CHAT_CHAR_PATH_MAX, "%s", config_path);
@@ -683,6 +748,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
   }
   if (strcmp(input, "/char unload") == 0) {
     if (*char_loaded) {
+      log_message(LOG_INFO, __FILE__, __LINE__, "Unloading character: %s",
+                  character->name);
       character_free(character);
       *char_loaded = false;
       current_char_path[0] = '\0';
@@ -743,6 +810,7 @@ static bool handle_slash_command(const char *input, Modal *modal,
     return true;
   }
   if (strcmp(input, "/clear") == 0) {
+    log_message(LOG_INFO, __FILE__, __LINE__, "Clearing chat history");
     history_free(history);
     history_init(history);
     ui_reset_reasoning_state();
@@ -770,6 +838,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
     while (*sys_msg == ' ')
       sys_msg++;
     if (*sys_msg) {
+      log_message(LOG_INFO, __FILE__, __LINE__, "Adding system message: %s",
+                  sys_msg);
       history_add_with_role(history, sys_msg, ROLE_SYSTEM);
       const char *char_name =
           (*char_loaded && character->name[0]) ? character->name : NULL;
@@ -847,14 +917,20 @@ static bool handle_slash_command(const char *input, Modal *modal,
     while (*path == ' ')
       path++;
     if (*path) {
+      log_message(LOG_INFO, __FILE__, __LINE__, "Loading lorebook: %s", path);
       lorebook_free(lorebook);
       lorebook_init(lorebook);
       if (lorebook_load_json(lorebook, path)) {
+        log_message(LOG_INFO, __FILE__, __LINE__,
+                    "Lorebook loaded: %s (%zu entries)", lorebook->name,
+                    lorebook->entry_count);
         char msg[256];
         snprintf(msg, sizeof(msg), "Loaded lorebook: %s (%zu entries)",
                  lorebook->name, lorebook->entry_count);
         modal_open_message(modal, msg, false);
       } else {
+        log_message(LOG_WARNING, __FILE__, __LINE__,
+                    "Failed to load lorebook: %s", path);
         modal_open_message(modal, "Failed to load lorebook", false);
       }
       return true;
@@ -958,6 +1034,8 @@ static bool handle_slash_command(const char *input, Modal *modal,
     while (*name == ' ')
       name++;
     TokenizerSelection sel = tokenizer_selection_from_name(name);
+    log_message(LOG_INFO, __FILE__, __LINE__,
+                "Setting tokenizer to: %s (for model: %s)", name, active->name);
     active->tokenizer_selection = sel;
     config_save_models(mf);
     if (chat_tokenizer_set(tokenizer, sel)) {
@@ -990,6 +1068,8 @@ int main(void) {
 
   ModelsFile models;
   config_load_models(&models);
+  log_message(LOG_INFO, __FILE__, __LINE__, "Loaded %zu model(s)",
+              models.count);
 
   AppSettings settings;
   config_load_settings(&settings);
@@ -1012,18 +1092,25 @@ int main(void) {
 
   ModelConfig *active_model = config_get_active(&models);
   if (active_model) {
+    log_message(LOG_INFO, __FILE__, __LINE__, "Active model: %s (API: %d)",
+                active_model->name, active_model->api_type);
     chat_tokenizer_set(&tokenizer, active_model->tokenizer_selection);
     set_current_tokenizer(&tokenizer);
+  } else {
+    log_message(LOG_WARNING, __FILE__, __LINE__, "No active model configured");
   }
 
   llm_init();
+  log_message(LOG_INFO, __FILE__, __LINE__, "Application starting");
 
   setlocale(LC_ALL, "");
 
   if (initscr() == NULL) {
+    log_message(LOG_ERROR, __FILE__, __LINE__, "Failed to initialize ncurses");
     fprintf(stderr, "Failed to initialize ncurses.\n");
     return EXIT_FAILURE;
   }
+  log_message(LOG_INFO, __FILE__, __LINE__, "ncurses initialized");
 
   set_escdelay(1);
   cbreak();
@@ -1035,12 +1122,24 @@ int main(void) {
 
   int current_input_height = 3;
 
-  WINDOW *chat_win = NULL;
-  WINDOW *input_win = NULL;
-  ui_layout_windows_with_input(&chat_win, &input_win, current_input_height);
+  UIWindows ui_windows = {.chat_win = NULL,
+                          .input_win = NULL,
+                          .console_win = NULL,
+                          .console_height = 0};
+  ui_layout_windows(&ui_windows, current_input_height);
+  WINDOW *chat_win = ui_windows.chat_win;
+  WINDOW *input_win = ui_windows.input_win;
 
   Modal modal;
   modal_init(&modal);
+
+  ConsoleState console;
+  console_init(&console);
+  // Store console pointer for callback
+  g_console_state = &console;
+  // Set up log callback to capture all log messages
+  log_set_callback(console_log_callback);
+  log_message(LOG_INFO, __FILE__, __LINE__, "Console logging initialized");
 
   SuggestionBox suggestions;
   suggestion_box_init(&suggestions, SLASH_COMMANDS, SLASH_COMMAND_COUNT);
@@ -1098,16 +1197,91 @@ int main(void) {
                user_disp, bot_disp, false);
   ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos, input_focused,
                              input_scroll_line, false, &attachments);
+  if (console_is_visible(&console) && ui_windows.console_win) {
+    ui_draw_console(ui_windows.console_win, &console);
+  }
 
   while (running) {
     user_disp = get_user_display_name(&persona);
     bot_disp = get_bot_display_name(&character, character_loaded);
-    WINDOW *active_win = modal_is_open(&modal) ? modal.win : input_win;
-    int ch = wgetch(active_win);
 
-    bool global_key_handled = handle_global_keys(ch, &running, &modal, &models);
+    // Redraw console if it needs updating and is visible
+    if (console_is_visible(&console) && ui_windows.console_win &&
+        console.needs_redraw) {
+      ui_draw_console(ui_windows.console_win, &console);
+    }
+
+    WINDOW *active_win = modal_is_open(&modal) ? modal.win : input_win;
+    // Set timeout to allow console updates while waiting for input
+    // Use 100ms timeout - short enough to feel responsive, long enough to not
+    // be wasteful
+    wtimeout(active_win, 100);
+    int ch = wgetch(active_win);
+    wtimeout(active_win, -1); // Reset to blocking mode
+
+    // If no key was pressed (timeout), continue loop to check for console
+    // updates
+    if (ch == ERR) {
+      continue;
+    }
+
+    // Handle global keys (console toggle, etc.)
+    bool global_key_handled =
+        handle_global_keys(ch, &running, &modal, &models, &console, &ui_windows,
+                           &current_input_height);
     if (global_key_handled) {
+      chat_win = ui_windows.chat_win;
+      input_win = ui_windows.input_win;
       if (!modal_is_open(&modal)) {
+        touchwin(chat_win);
+        touchwin(input_win);
+        if (ui_windows.console_win)
+          touchwin(ui_windows.console_win);
+        ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
+                     user_disp, bot_disp, false);
+        ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos,
+                                   input_focused, input_scroll_line, false,
+                                   &attachments);
+        if (console_is_visible(&console) && ui_windows.console_win) {
+          ui_draw_console(ui_windows.console_win, &console);
+        }
+      }
+      continue;
+    }
+
+    // Handle console-specific keys when console is visible and focused
+    if (console_is_visible(&console) && ui_windows.console_win &&
+        active_win == ui_windows.console_win) {
+      if (ch == KEY_UP || ch == 'k') {
+        console_scroll(&console, 1);
+        ui_draw_console(ui_windows.console_win, &console);
+        continue;
+      } else if (ch == KEY_DOWN || ch == 'j') {
+        console_scroll(&console, -1);
+        ui_draw_console(ui_windows.console_win, &console);
+        continue;
+      } else if (ch == KEY_PPAGE) {
+        int h, w;
+        getmaxyx(ui_windows.console_win, h, w);
+        console_scroll(&console, h - 2);
+        ui_draw_console(ui_windows.console_win, &console);
+        continue;
+      } else if (ch == KEY_NPAGE) {
+        int h, w;
+        getmaxyx(ui_windows.console_win, h, w);
+        console_scroll(&console, -(h - 2));
+        ui_draw_console(ui_windows.console_win, &console);
+        continue;
+      } else if (ch == 'G') {
+        console_scroll_to_bottom(&console);
+        ui_draw_console(ui_windows.console_win, &console);
+        continue;
+      } else if (ch == 'q' || ch == 27) { // 'q' or ESC to close console
+        console_set_visible(&console, false);
+        ui_windows.console_height = 0;
+        ui_layout_windows(&ui_windows, current_input_height);
+        chat_win = ui_windows.chat_win;
+        input_win = ui_windows.input_win;
         touchwin(chat_win);
         touchwin(input_win);
         ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
@@ -1115,12 +1289,14 @@ int main(void) {
         ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos,
                                    input_focused, input_scroll_line, false,
                                    &attachments);
+        continue;
       }
-      continue;
     }
 
     if (ch == KEY_RESIZE) {
-      ui_layout_windows_with_input(&chat_win, &input_win, current_input_height);
+      ui_layout_windows(&ui_windows, current_input_height);
+      chat_win = ui_windows.chat_win;
+      input_win = ui_windows.input_win;
       selected_msg = MSG_SELECT_NONE;
       input_focused = true;
       ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
@@ -1128,6 +1304,9 @@ int main(void) {
       ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos,
                                  input_focused, input_scroll_line, false,
                                  &attachments);
+      if (console_is_visible(&console) && ui_windows.console_win) {
+        ui_draw_console(ui_windows.console_win, &console);
+      }
       if (modal_is_open(&modal)) {
         modal_close(&modal);
       }
@@ -1142,6 +1321,12 @@ int main(void) {
           &modal, ch, &models, &history, current_chat_id, current_char_path,
           sizeof(current_char_path), &persona, &selected_greeting);
       if (!modal_is_open(&modal) && was_model_edit) {
+        ModelConfig *active = config_get_active(&models);
+        if (active) {
+          log_message(LOG_INFO, __FILE__, __LINE__,
+                      "Model configuration changed, updating tokenizer for: %s",
+                      active->name);
+        }
         update_tokenizer_from_model(&tokenizer, &models);
       }
       if (result == MODAL_RESULT_CHAT_LOADED) {
@@ -1717,6 +1902,8 @@ int main(void) {
                                   .lorebook = &lorebook,
                                   .tokenizer = &tokenizer};
 
+            log_message(LOG_INFO, __FILE__, __LINE__,
+                        "Regenerating swipe for message %d", selected_msg);
             history_add_swipe(&history, selected_msg, "Bot: *thinking*");
             ui_draw_chat(chat_win, &history, selected_msg,
                          get_model_name(&models), user_disp, bot_disp, false);
@@ -1724,6 +1911,9 @@ int main(void) {
             ModelConfig *model = config_get_active(&models);
             const char *model_name = get_model_name(&models);
             if (model) {
+              log_message(LOG_DEBUG, __FILE__, __LINE__,
+                          "Starting swipe regeneration with model: %s",
+                          model_name);
               StreamContext ctx = {.history = &history,
                                    .chat_win = chat_win,
                                    .input_win = input_win,
@@ -1752,13 +1942,22 @@ int main(void) {
                            reasoning_callback, progress_callback, &ctx);
 
               if (!resp.success) {
+                log_message(LOG_ERROR, __FILE__, __LINE__,
+                            "Swipe regeneration failed: %s", resp.error);
                 char err_msg[512];
                 snprintf(err_msg, sizeof(err_msg),
                          "Bot: *frowns* \"Error: %s\"", resp.error);
                 history_update(&history, selected_msg, err_msg);
               } else if (ctx.buf_len == 0) {
+                log_message(LOG_WARNING, __FILE__, __LINE__,
+                            "Swipe regeneration returned empty response");
                 history_update(&history, selected_msg, "Bot: *stays silent*");
               } else {
+                log_message(LOG_INFO, __FILE__, __LINE__,
+                            "Swipe regeneration completed: %d tokens, %.1fms, "
+                            "%.1f tok/s",
+                            resp.completion_tokens, resp.elapsed_ms,
+                            resp.output_tps);
                 size_t active_swipe =
                     history_get_active_swipe(&history, selected_msg);
                 history_set_token_count(&history, selected_msg, active_swipe,
@@ -2097,7 +2296,13 @@ int main(void) {
       if (settings.paste_attachment_threshold > 0 &&
           input_len >= settings.paste_attachment_threshold &&
           attachments.count < MAX_ATTACHMENTS) {
+        log_message(
+            LOG_INFO, __FILE__, __LINE__,
+            "Creating attachment from paste (length: %d, threshold: %d)",
+            input_len, settings.paste_attachment_threshold);
         if (save_attachment_to_list(input_buffer, input_len, &attachments)) {
+          log_message(LOG_INFO, __FILE__, __LINE__,
+                      "Attachment created successfully");
           input_buffer[0] = '\0';
           input_len = 0;
           cursor_pos = 0;
@@ -2121,6 +2326,7 @@ int main(void) {
       }
 
       if (strcmp(input_buffer, "/quit") == 0) {
+        log_message(LOG_INFO, __FILE__, __LINE__, "User requested quit");
         running = false;
         break;
       }
@@ -2162,7 +2368,11 @@ int main(void) {
 
       char *msg_content = NULL;
 
+      // Log message being sent
       if (attachments.count > 0) {
+        log_message(LOG_INFO, __FILE__, __LINE__,
+                    "Sending message with %d attachment(s), text length: %d",
+                    attachments.count, input_len);
         size_t display_len = strlen(input_buffer) + 1;
         for (int i = 0; i < attachments.count; i++) {
           display_len += strlen(attachments.items[i].filename) + 20;
@@ -2219,6 +2429,8 @@ int main(void) {
           int user_tokens = llm_tokenize(model, expanded ? expanded : msg_text);
           if (expanded)
             free(expanded);
+          log_message(LOG_DEBUG, __FILE__, __LINE__,
+                      "User message tokenized: %d tokens", user_tokens);
           history_set_token_count(&history, user_msg_idx, 0, user_tokens);
         }
         selected_msg = MSG_SELECT_NONE;
@@ -2231,8 +2443,11 @@ int main(void) {
                                  &attachments);
 
       ModelConfig *active_model = config_get_active(&models);
-      if (active_model)
+      if (active_model) {
         sampler_load(&current_samplers, active_model->api_type);
+        log_message(LOG_DEBUG, __FILE__, __LINE__,
+                    "Samplers loaded for API type: %d", active_model->api_type);
+      }
       LLMContext llm_ctx = {.character = character_loaded ? &character : NULL,
                             .persona = &persona,
                             .samplers = &current_samplers,
@@ -2240,11 +2455,17 @@ int main(void) {
                             .lorebook = &lorebook,
                             .tokenizer = &tokenizer};
 
+      log_message(LOG_INFO, __FILE__, __LINE__,
+                  "Initiating LLM reply (history size: %zu)", history.count);
       do_llm_reply(&history, chat_win, input_win, NULL, &models, &selected_msg,
                    &llm_ctx, user_disp, bot_disp);
 
       const char *char_name =
           (character_loaded && character.name[0]) ? character.name : NULL;
+      log_message(LOG_DEBUG, __FILE__, __LINE__,
+                  "Auto-saving chat (ID: %s, character: %s)",
+                  current_chat_id[0] ? current_chat_id : "new",
+                  char_name ? char_name : "none");
       chat_auto_save_with_note(&history, &author_note, current_chat_id,
                                sizeof(current_chat_id), current_char_path,
                                char_name);
@@ -2293,6 +2514,8 @@ int main(void) {
         }
       } else if (attachments.selected >= 0) {
         int removed_idx = attachments.selected;
+        log_message(LOG_INFO, __FILE__, __LINE__, "Deleting attachment: %s",
+                    attachments.items[removed_idx].filename);
         delete_attachment_file(attachments.items[removed_idx].filename);
         attachment_list_remove(&attachments, removed_idx);
         if (attachments.count == 0) {
@@ -2324,6 +2547,8 @@ int main(void) {
         continue;
       if (attachments.selected >= 0) {
         int removed_idx = attachments.selected;
+        log_message(LOG_INFO, __FILE__, __LINE__, "Deleting attachment: %s",
+                    attachments.items[removed_idx].filename);
         delete_attachment_file(attachments.items[removed_idx].filename);
         attachment_list_remove(&attachments, removed_idx);
         if (attachments.count == 0) {
