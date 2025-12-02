@@ -1,7 +1,10 @@
 #include "chat/author_note.h"
 #include "chat/history.h"
 #include "core/config.h"
+#include "core/error.h"
+#include "core/log.h"
 #include "core/macros.h"
+#include "core/time.h"
 #include "llm/sampler.h"
 #include "test_framework.h"
 #include "tokenizer/tiktoken.h"
@@ -853,6 +856,187 @@ TEST(attachment_list_max_test) {
   PASS();
 }
 
+TEST(ui_windows_struct_size) {
+  UIWindows windows;
+  ASSERT(sizeof(windows) > 0);
+  PASS();
+}
+
+TEST(ui_windows_init_null_safe) {
+  ui_layout_windows(NULL, 3);
+  PASS();
+}
+
+TEST(ui_windows_console_height_zero) {
+  UIWindows windows = {0};
+  windows.console_height = 0;
+  ui_layout_windows(&windows, 3);
+  ASSERT_NULL(windows.console_win);
+  PASS();
+}
+
+TEST(ui_windows_console_height_negative) {
+  UIWindows windows = {0};
+  windows.console_height = -1;
+  ui_layout_windows(&windows, 3);
+  ASSERT_NULL(windows.console_win);
+  PASS();
+}
+
+TEST(time_get_timestamp_null_safe) {
+  get_timestamp(NULL, 100);
+  PASS();
+}
+
+TEST(time_get_timestamp_zero_size) {
+  char buf[100];
+  get_timestamp(buf, 0);
+  PASS();
+}
+
+TEST(time_get_timestamp_valid_format) {
+  char buf[32];
+  get_timestamp(buf, sizeof(buf));
+  ASSERT(strlen(buf) > 0);
+  ASSERT(strlen(buf) < sizeof(buf));
+  PASS();
+}
+
+TEST(time_get_timestamp_small_buffer) {
+  char buf[5];
+  memset(buf, 0xFF, sizeof(buf));
+  get_timestamp(buf, sizeof(buf));
+  ASSERT(buf[sizeof(buf) - 1] == '\0' || buf[0] == '\0');
+  PASS();
+}
+
+static bool g_error_callback_called = false;
+static char g_error_callback_msg[512];
+
+static void test_error_callback(const char *msg) {
+  g_error_callback_called = true;
+  if (msg) {
+    strncpy(g_error_callback_msg, msg, sizeof(g_error_callback_msg) - 1);
+    g_error_callback_msg[sizeof(g_error_callback_msg) - 1] = '\0';
+  }
+}
+
+TEST(error_log_error_user_callback) {
+  g_error_callback_called = false;
+  g_error_callback_msg[0] = '\0';
+  log_set_user_error_callback(test_error_callback);
+  log_error_user("Test error");
+  ASSERT_TRUE(g_error_callback_called);
+  ASSERT(strlen(g_error_callback_msg) > 0);
+  log_set_user_error_callback(NULL);
+  PASS();
+}
+
+TEST(error_log_error_internal_callback) {
+  g_error_callback_called = false;
+  g_error_callback_msg[0] = '\0';
+  log_set_internal_error_callback(test_error_callback);
+  log_error_internal("Test internal error");
+  ASSERT_TRUE(g_error_callback_called);
+  ASSERT(strlen(g_error_callback_msg) > 0);
+  log_set_internal_error_callback(NULL);
+  PASS();
+}
+
+TEST(error_log_warning_callback) {
+  g_error_callback_called = false;
+  g_error_callback_msg[0] = '\0';
+  log_set_warning_callback(test_error_callback);
+  log_warning_internal("Test warning");
+  ASSERT_TRUE(g_error_callback_called);
+  ASSERT(strlen(g_error_callback_msg) > 0);
+  log_set_warning_callback(NULL);
+  PASS();
+}
+
+TEST(error_log_info_callback) {
+  g_error_callback_called = false;
+  g_error_callback_msg[0] = '\0';
+  log_set_info_callback(test_error_callback);
+  log_info_internal("Test info");
+  ASSERT_TRUE(g_error_callback_called);
+  ASSERT(strlen(g_error_callback_msg) > 0);
+  log_set_info_callback(NULL);
+  PASS();
+}
+
+TEST(error_log_format_string) {
+  g_error_callback_called = false;
+  g_error_callback_msg[0] = '\0';
+  log_set_internal_error_callback(test_error_callback);
+  log_error_internal("Test %d %s", 42, "message");
+  ASSERT_TRUE(g_error_callback_called);
+  ASSERT(strstr(g_error_callback_msg, "42") != NULL);
+  ASSERT(strstr(g_error_callback_msg, "message") != NULL);
+  log_set_internal_error_callback(NULL);
+  PASS();
+}
+
+static bool g_log_callback_called = false;
+static LogLevel g_log_callback_level;
+static char g_log_callback_file[256];
+static int g_log_callback_line;
+static char g_log_callback_msg[512];
+
+static void test_log_callback(LogLevel level, const char *file, int line,
+                              const char *msg) {
+  g_log_callback_called = true;
+  g_log_callback_level = level;
+  if (file) {
+    strncpy(g_log_callback_file, file, sizeof(g_log_callback_file) - 1);
+    g_log_callback_file[sizeof(g_log_callback_file) - 1] = '\0';
+  } else {
+    g_log_callback_file[0] = '\0';
+  }
+  g_log_callback_line = line;
+  if (msg) {
+    strncpy(g_log_callback_msg, msg, sizeof(g_log_callback_msg) - 1);
+    g_log_callback_msg[sizeof(g_log_callback_msg) - 1] = '\0';
+  } else {
+    g_log_callback_msg[0] = '\0';
+  }
+}
+
+TEST(log_message_callback) {
+  g_log_callback_called = false;
+  log_set_callback(test_log_callback);
+  log_message(LOG_INFO, "test.c", 42, "Test message");
+  ASSERT_TRUE(g_log_callback_called);
+  ASSERT_EQ(LOG_INFO, g_log_callback_level);
+  ASSERT_EQ_INT(42, g_log_callback_line);
+  ASSERT(strlen(g_log_callback_msg) > 0);
+  log_set_callback(NULL);
+  PASS();
+}
+
+TEST(log_message_all_levels) {
+  log_set_callback(test_log_callback);
+  log_message(LOG_DEBUG, "test.c", 1, "Debug");
+  ASSERT_EQ(LOG_DEBUG, g_log_callback_level);
+  log_message(LOG_INFO, "test.c", 2, "Info");
+  ASSERT_EQ(LOG_INFO, g_log_callback_level);
+  log_message(LOG_WARNING, "test.c", 3, "Warning");
+  ASSERT_EQ(LOG_WARNING, g_log_callback_level);
+  log_message(LOG_ERROR, "test.c", 4, "Error");
+  ASSERT_EQ(LOG_ERROR, g_log_callback_level);
+  log_set_callback(NULL);
+  PASS();
+}
+
+TEST(log_message_format_string) {
+  log_set_callback(test_log_callback);
+  log_message(LOG_INFO, "test.c", 10, "Test %d %s", 42, "message");
+  ASSERT(strstr(g_log_callback_msg, "42") != NULL);
+  ASSERT(strstr(g_log_callback_msg, "message") != NULL);
+  log_set_callback(NULL);
+  PASS();
+}
+
 void run_robustness_tests(void) {
   TEST_SUITE("Robustness Tests");
   RUN_TEST(robust_history_very_long_message);
@@ -904,6 +1088,22 @@ void run_robustness_tests(void) {
   RUN_TEST(author_note_position_values);
   RUN_TEST(author_note_role_values);
   RUN_TEST(reasoning_set_get_basic);
+  RUN_TEST(ui_windows_struct_size);
+  RUN_TEST(ui_windows_init_null_safe);
+  RUN_TEST(ui_windows_console_height_zero);
+  RUN_TEST(ui_windows_console_height_negative);
+  RUN_TEST(time_get_timestamp_null_safe);
+  RUN_TEST(time_get_timestamp_zero_size);
+  RUN_TEST(time_get_timestamp_valid_format);
+  RUN_TEST(time_get_timestamp_small_buffer);
+  RUN_TEST(error_log_error_user_callback);
+  RUN_TEST(error_log_error_internal_callback);
+  RUN_TEST(error_log_warning_callback);
+  RUN_TEST(error_log_info_callback);
+  RUN_TEST(error_log_format_string);
+  RUN_TEST(log_message_callback);
+  RUN_TEST(log_message_all_levels);
+  RUN_TEST(log_message_format_string);
   RUN_TEST(reasoning_null_on_missing);
   RUN_TEST(reasoning_multiple_swipes);
   RUN_TEST(reasoning_null_safety);

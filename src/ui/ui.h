@@ -86,6 +86,15 @@ void ui_init_colors(void);
 int ui_calc_input_height_ex(const char *buffer, int win_width,
                             const AttachmentList *attachments);
 #define ui_calc_input_height(b, w) ui_calc_input_height_ex(b, w, NULL)
+
+typedef struct {
+  WINDOW *chat_win;
+  WINDOW *input_win;
+  WINDOW *console_win;
+  int console_height;
+} UIWindows;
+
+void ui_layout_windows(UIWindows *windows, int input_height);
 void ui_layout_windows_with_input(WINDOW **chat_win, WINDOW **input_win,
                                   int input_height);
 

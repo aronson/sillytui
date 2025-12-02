@@ -24,6 +24,9 @@ set(SOURCES
     src/main.c
     src/core/config.c
     src/core/macros.c
+    src/core/time.c
+    src/core/error.c
+    src/core/log.c
     src/ui/ui.c
     src/ui/modal.c
     src/ui/markdown.c
@@ -72,6 +75,9 @@ set(TEST_SOURCES
     tests/test_modal.c
     src/core/config.c
     src/core/macros.c
+    src/core/time.c
+    src/core/error.c
+    src/core/log.c
     src/chat/history.c
     src/chat/author_note.c
     src/llm/sampler.c
@@ -172,6 +178,9 @@ set(ALL_TEST_SOURCES
     tests/integration/test_tokenizer_integration.c
     src/core/config.c
     src/core/macros.c
+    src/core/time.c
+    src/core/error.c
+    src/core/log.c
     src/chat/chat.c
     src/chat/history.c
     src/chat/author_note.c

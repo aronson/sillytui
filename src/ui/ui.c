@@ -137,28 +137,59 @@ int ui_calc_input_height_ex(const char *buffer, int win_width,
   return height;
 }
 
-void ui_layout_windows_with_input(WINDOW **chat_win, WINDOW **input_win,
-                                  int input_height) {
+void ui_layout_windows(UIWindows *windows, int input_height) {
+  if (!windows)
+    return;
+
   int rows, cols;
   getmaxyx(stdscr, rows, cols);
 
   if (input_height < 3)
     input_height = 3;
-  if (input_height > rows - 3)
-    input_height = rows - 3;
 
-  int chat_height = rows - input_height;
+  int console_height = windows->console_height;
+  if (console_height < 0)
+    console_height = 0;
+  if (console_height > rows - 6)
+    console_height = rows - 6;
+
+  int available_height = rows - console_height;
+  if (input_height > available_height - 3)
+    input_height = available_height - 3;
+
+  int chat_height = available_height - input_height;
   if (chat_height < 3)
     chat_height = 3;
 
-  if (*chat_win)
-    delwin(*chat_win);
-  if (*input_win)
-    delwin(*input_win);
+  if (windows->chat_win)
+    delwin(windows->chat_win);
+  if (windows->input_win)
+    delwin(windows->input_win);
+  if (windows->console_win)
+    delwin(windows->console_win);
 
-  *chat_win = newwin(chat_height, cols, 0, 0);
-  *input_win = newwin(input_height, cols, chat_height, 0);
-  keypad(*input_win, TRUE);
+  windows->chat_win = newwin(chat_height, cols, 0, 0);
+  windows->input_win = newwin(input_height, cols, chat_height, 0);
+  keypad(windows->input_win, TRUE);
+
+  if (console_height > 0) {
+    windows->console_win =
+        newwin(console_height, cols, chat_height + input_height, 0);
+    keypad(windows->console_win, TRUE);
+  } else {
+    windows->console_win = NULL;
+  }
+}
+
+void ui_layout_windows_with_input(WINDOW **chat_win, WINDOW **input_win,
+                                  int input_height) {
+  UIWindows windows = {.chat_win = *chat_win,
+                       .input_win = *input_win,
+                       .console_win = NULL,
+                       .console_height = 0};
+  ui_layout_windows(&windows, input_height);
+  *chat_win = windows.chat_win;
+  *input_win = windows.input_win;
 }
 
 static bool starts_with(const char *str, const char *prefix) {

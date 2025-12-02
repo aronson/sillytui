@@ -472,6 +472,15 @@ static void update_tokenizer_from_model(ChatTokenizer *tokenizer,
   }
 }
 
+static bool handle_global_keys(int ch, bool *running, Modal *modal,
+                               ModelsFile *models) {
+  (void)ch;
+  (void)running;
+  (void)modal;
+  (void)models;
+  return false;
+}
+
 static bool handle_slash_command(const char *input, Modal *modal,
                                  ModelsFile *mf, ChatHistory *history,
                                  char *current_chat_id, char *current_char_path,
@@ -1095,6 +1104,20 @@ int main(void) {
     bot_disp = get_bot_display_name(&character, character_loaded);
     WINDOW *active_win = modal_is_open(&modal) ? modal.win : input_win;
     int ch = wgetch(active_win);
+
+    bool global_key_handled = handle_global_keys(ch, &running, &modal, &models);
+    if (global_key_handled) {
+      if (!modal_is_open(&modal)) {
+        touchwin(chat_win);
+        touchwin(input_win);
+        ui_draw_chat(chat_win, &history, selected_msg, get_model_name(&models),
+                     user_disp, bot_disp, false);
+        ui_draw_input_multiline_ex(input_win, input_buffer, cursor_pos,
+                                   input_focused, input_scroll_line, false,
+                                   &attachments);
+      }
+      continue;
+    }
 
     if (ch == KEY_RESIZE) {
       ui_layout_windows_with_input(&chat_win, &input_win, current_input_height);

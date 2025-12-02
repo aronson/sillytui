@@ -1,6 +1,7 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+#include "core/log.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -26,21 +27,18 @@ extern unsigned int g_coverage_counter;
 #define SILLYTUI_ASSERT(X)                                                     \
   do {                                                                         \
     if (!(X)) {                                                                \
-      fprintf(stderr, "ASSERTION FAILED: %s at %s:%d\n", #X, __FILE__,         \
-              __LINE__);                                                       \
+      log_message(LOG_ERROR, __FILE__, __LINE__, "ASSERTION FAILED: %s", #X);  \
       abort();                                                                 \
     }                                                                          \
   } while (0)
 
 #define ALWAYS(X)                                                              \
   ((X) ? 1                                                                     \
-       : (fprintf(stderr, "ALWAYS failed: %s at %s:%d\n", #X, __FILE__,        \
-                  __LINE__),                                                   \
+       : (log_message(LOG_ERROR, __FILE__, __LINE__, "ALWAYS failed: %s", #X), \
           abort(), 0))
 
 #define NEVER(X)                                                               \
-  ((X) ? (fprintf(stderr, "NEVER failed: %s at %s:%d\n", #X, __FILE__,         \
-                  __LINE__),                                                   \
+  ((X) ? (log_message(LOG_ERROR, __FILE__, __LINE__, "NEVER failed: %s", #X),  \
           abort(), 1)                                                          \
        : 0)
 
@@ -71,7 +69,7 @@ extern unsigned int g_coverage_counter;
 #ifdef SILLYTUI_DEBUG
 #define DEBUG_ONLY(X) X
 #define DEBUG_PRINTF(fmt, ...)                                                 \
-  fprintf(stderr, "[DEBUG %s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+  log_message(LOG_DEBUG, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #else
 #define DEBUG_ONLY(X)
 #define DEBUG_PRINTF(fmt, ...)
@@ -79,15 +77,14 @@ extern unsigned int g_coverage_counter;
 
 #define UNREACHABLE()                                                          \
   do {                                                                         \
-    fprintf(stderr, "UNREACHABLE at %s:%d\n", __FILE__, __LINE__);             \
+    log_message(LOG_ERROR, __FILE__, __LINE__, "UNREACHABLE");                 \
     abort();                                                                   \
   } while (0)
 
 #define CHECK_NOT_NULL(ptr)                                                    \
   do {                                                                         \
     if ((ptr) == NULL) {                                                       \
-      fprintf(stderr, "NULL pointer: %s at %s:%d\n", #ptr, __FILE__,           \
-              __LINE__);                                                       \
+      log_message(LOG_ERROR, __FILE__, __LINE__, "NULL pointer: %s", #ptr);    \
       abort();                                                                 \
     }                                                                          \
   } while (0)
@@ -95,8 +92,8 @@ extern unsigned int g_coverage_counter;
 #define CHECK_BOUNDS(index, size)                                              \
   do {                                                                         \
     if ((size_t)(index) >= (size_t)(size)) {                                   \
-      fprintf(stderr, "Bounds check failed: %s >= %s at %s:%d\n", #index,      \
-              #size, __FILE__, __LINE__);                                      \
+      log_message(LOG_ERROR, __FILE__, __LINE__,                               \
+                  "Bounds check failed: %s >= %s", #index, #size);             \
       abort();                                                                 \
     }                                                                          \
   } while (0)
