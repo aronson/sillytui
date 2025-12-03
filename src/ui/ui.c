@@ -84,6 +84,10 @@ static void draw_rounded_box(WINDOW *win, int color_pair, bool focused) {
   if (g_ui_colors)
     wattron(win, COLOR_PAIR(actual_color));
 
+  if (focused && g_ui_colors) {
+    wattron(win, A_BOLD);
+  }
+
   mvwaddstr(win, 0, 0, "╭");
   for (int x = 1; x < w - 1; x++)
     mvwaddstr(win, 0, x, "─");
@@ -99,6 +103,9 @@ static void draw_rounded_box(WINDOW *win, int color_pair, bool focused) {
     mvwaddstr(win, h - 1, x, "─");
   mvwaddstr(win, h - 1, w - 1, "╯");
 
+  if (focused && g_ui_colors) {
+    wattroff(win, A_BOLD);
+  }
   if (g_ui_colors)
     wattroff(win, COLOR_PAIR(actual_color));
 }
@@ -106,13 +113,13 @@ static void draw_rounded_box(WINDOW *win, int color_pair, bool focused) {
 static void draw_title(WINDOW *win, const char *title, int color_pair) {
   int w = getmaxx(win);
   int title_len = (int)strlen(title);
-  int pos = (w - title_len - 2) / 2;
+  int pos = (w - title_len - 4) / 2;
   if (pos < 2)
     pos = 2;
 
   if (g_ui_colors)
     wattron(win, COLOR_PAIR(color_pair) | A_BOLD);
-  mvwprintw(win, 0, pos, " %s ", title);
+  mvwprintw(win, 0, pos, "◈ %s ◈", title);
   if (g_ui_colors)
     wattroff(win, COLOR_PAIR(color_pair) | A_BOLD);
 }
@@ -1086,14 +1093,14 @@ void ui_draw_chat_ex_with_offset_and_mode(
       for (int i = 1; i < scrollbar_height - 1; i++) {
         if (i >= thumb_pos && i < thumb_pos + thumb_size) {
           if (g_ui_colors)
-            wattron(chat_win, COLOR_PAIR(COLOR_PAIR_BORDER));
-          mvwaddstr(chat_win, i, width - 2, "█");
+            wattron(chat_win, COLOR_PAIR(COLOR_PAIR_BORDER) | A_BOLD);
+          mvwaddstr(chat_win, i, width - 2, "▮");
           if (g_ui_colors)
-            wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_BORDER));
+            wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_BORDER) | A_BOLD);
         } else {
           if (g_ui_colors)
             wattron(chat_win, COLOR_PAIR(COLOR_PAIR_BORDER_DIM));
-          mvwaddstr(chat_win, i, width - 2, "░");
+          mvwaddstr(chat_win, i, width - 2, "▯");
           if (g_ui_colors)
             wattroff(chat_win, COLOR_PAIR(COLOR_PAIR_BORDER_DIM));
         }
@@ -1234,15 +1241,15 @@ void ui_draw_input_multiline_ex(WINDOW *input_win, const char *buffer,
   if (focused) {
     if (g_ui_colors)
       wattron(input_win, COLOR_PAIR(COLOR_PAIR_PROMPT) | A_BOLD);
-    mvwaddstr(input_win, input_start_y, 2, "›");
+    mvwaddstr(input_win, input_start_y, 2, "▸");
     if (g_ui_colors)
       wattroff(input_win, COLOR_PAIR(COLOR_PAIR_PROMPT) | A_BOLD);
   } else {
     if (g_ui_colors)
-      wattron(input_win, COLOR_PAIR(COLOR_PAIR_HINT));
-    mvwaddstr(input_win, input_start_y, 2, "›");
+      wattron(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+    mvwaddstr(input_win, input_start_y, 2, "▸");
     if (g_ui_colors)
-      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_HINT));
+      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
   }
 
   if (buffer[0] == '\0') {
@@ -1332,13 +1339,13 @@ void ui_draw_input_multiline_ex(WINDOW *input_win, const char *buffer,
 
   if (total_lines > visible_lines) {
     if (g_ui_colors)
-      wattron(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      wattron(input_win, COLOR_PAIR(COLOR_PAIR_BORDER) | A_DIM);
     if (scroll_line > 0)
       mvwaddstr(input_win, 0, w / 2, "▲");
     if (scroll_line + visible_lines < total_lines)
       mvwaddstr(input_win, h - 1, w / 2, "▼");
     if (g_ui_colors)
-      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
+      wattroff(input_win, COLOR_PAIR(COLOR_PAIR_BORDER) | A_DIM);
   }
 
   if (focused && !editing_mode) {
@@ -1655,17 +1662,17 @@ void suggestion_box_draw(SuggestionBox *sb) {
 
   if (sb->scroll_offset > 0) {
     if (g_ui_colors)
-      wattron(sb->win, COLOR_PAIR(COLOR_PAIR_HINT));
+      wattron(sb->win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
     mvwaddstr(sb->win, 0, w / 2, "▲");
     if (g_ui_colors)
-      wattroff(sb->win, COLOR_PAIR(COLOR_PAIR_HINT));
+      wattroff(sb->win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
   }
   if (sb->scroll_offset + sb->visible_count < sb->matched_count) {
     if (g_ui_colors)
-      wattron(sb->win, COLOR_PAIR(COLOR_PAIR_HINT));
+      wattron(sb->win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
     mvwaddstr(sb->win, h - 1, w / 2, "▼");
     if (g_ui_colors)
-      wattroff(sb->win, COLOR_PAIR(COLOR_PAIR_HINT));
+      wattroff(sb->win, COLOR_PAIR(COLOR_PAIR_HINT) | A_DIM);
   }
 
   int name_col_width = 18;
