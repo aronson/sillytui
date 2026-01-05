@@ -39,6 +39,7 @@ extern void run_config_integration_tests(void);
 extern void run_persona_integration_tests(void);
 extern void run_tokenizer_integration_tests(void);
 extern void run_safetensors_tests(void);
+extern void run_gemm_tests(void);
 
 int main(int argc, char **argv) {
   (void)argc;
@@ -98,6 +99,7 @@ int main(int argc, char **argv) {
   run_persona_integration_tests();
   run_tokenizer_integration_tests();
   run_safetensors_tests();
+  run_gemm_tests();
 
   clock_t end = clock();
   double elapsed = (double)(end - start) / CLOCKS_PER_SEC;

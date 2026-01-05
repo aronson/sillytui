@@ -1,7 +1,6 @@
 #include "test_framework.h"
 #include <cstring>
 
-#define SAFETENSORS_CPP_IMPLEMENTATION
 #include "inference/model_loader/safetensors.hh"
 
 static const char *get_test_file_path(void) {

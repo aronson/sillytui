@@ -4238,8 +4238,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
                   if (de->is_string) {
                     strncpy(de->str_val, m->sampler_dict_val, DICT_VAL_LEN - 1);
                     de->str_val[DICT_VAL_LEN - 1] = '\0';
-                  }
-                  else
+                  } else
                     de->num_val = atof(m->sampler_dict_val);
                   cs->dict_count++;
                   m->sampler_dict_index = cs->dict_count;
