@@ -710,6 +710,7 @@ static bool handle_global_keys(int ch, bool *running, Modal *modal,
         if (console_is_visible(console)) {
           int rows, cols;
           getmaxyx(stdscr, rows, cols);
+          (void)cols;
           // Set console to ~25% of screen or 8 lines, whichever is smaller
           ui_windows->console_height = (rows / 4) < 8 ? (rows / 4) : 8;
           if (ui_windows->console_height < 5)
@@ -1477,12 +1478,14 @@ int main(void) {
       } else if (ch == KEY_PPAGE) {
         int h, w;
         getmaxyx(stdscr, h, w);
+        (void)w;
         console_scroll(&console, h - 2);
         ui_draw_console_fullscreen(&console);
         continue;
       } else if (ch == KEY_NPAGE) {
         int h, w;
         getmaxyx(stdscr, h, w);
+        (void)w;
         console_scroll(&console, -(h - 2));
         ui_draw_console_fullscreen(&console);
         continue;
@@ -1560,12 +1563,14 @@ int main(void) {
       } else if (ch == KEY_PPAGE) {
         int h, w;
         getmaxyx(ui_windows.console_win, h, w);
+        (void)w;
         console_scroll(&console, h - 2);
         ui_draw_console(ui_windows.console_win, &console);
         continue;
       } else if (ch == KEY_NPAGE) {
         int h, w;
         getmaxyx(ui_windows.console_win, h, w);
+        (void)w;
         console_scroll(&console, -(h - 2));
         ui_draw_console(ui_windows.console_win, &console);
         continue;
