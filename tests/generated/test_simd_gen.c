@@ -4247,7 +4247,7 @@ TEST(simd_count_utf8_chars_ascii_len_64) {
 }
 
 TEST(simd_match_ascii_letters_len_0) {
-  uint8_t buf[1];
+  uint8_t buf[1] = {0};
   for (int i = 0; i < 0; i++)
     buf[i] = 'A' + (i % 26);
   size_t matched = simd_match_ascii_letters(buf, 0);

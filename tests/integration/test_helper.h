@@ -38,9 +38,11 @@ __attribute__((unused)) static void setup_test_environment(void) {
   snprintf(config_dir, sizeof(config_dir), "%s/.config/sillytui", g_test_home);
   char cmd[700];
   snprintf(cmd, sizeof(cmd), "mkdir -p %s", config_dir);
-  system(cmd);
+  int ret = system(cmd);
+  (void)ret;
   snprintf(cmd, sizeof(cmd), "mkdir -p %s/.config/sillytui/chats", g_test_home);
-  system(cmd);
+  ret = system(cmd);
+  (void)ret;
   setenv("HOME", g_test_home, 1);
 }
 

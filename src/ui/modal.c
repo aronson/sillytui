@@ -3618,6 +3618,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
             for (int i = 0; i < list_cnt; i++) {
               cs->list_values[i] = list_vals[i];
               strncpy(cs->list_strings[i], list_strs[i], 63);
+              cs->list_strings[i][63] = '\0';
             }
           }
         } else if (*p == '{') {
@@ -3672,7 +3673,8 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
               entries[dict_cnt].num_val = atof(num);
               entries[dict_cnt].is_string = false;
             }
-            strncpy(entries[dict_cnt].key, dkey, 31);
+            strncpy(entries[dict_cnt].key, dkey, DICT_KEY_LEN - 1);
+            entries[dict_cnt].key[DICT_KEY_LEN - 1] = '\0';
             dict_cnt++;
           }
           if (*p == '}')
@@ -3989,6 +3991,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
               if (cs->type == SAMPLER_TYPE_LIST_STRING) {
                 strncpy(cs->list_strings[m->sampler_list_index],
                         m->sampler_list_input, 63);
+                cs->list_strings[m->sampler_list_index][63] = '\0';
               } else {
                 cs->list_values[m->sampler_list_index] =
                     atof(m->sampler_list_input);
@@ -4010,6 +4013,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
               if (cs->type == SAMPLER_TYPE_LIST_STRING) {
                 strncpy(cs->list_strings[m->sampler_list_index],
                         m->sampler_list_input, 63);
+                cs->list_strings[m->sampler_list_index][63] = '\0';
               } else {
                 cs->list_values[m->sampler_list_index] =
                     atof(m->sampler_list_input);
@@ -4056,6 +4060,7 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
           for (int i = m->sampler_list_index; i < cs->list_count - 1; i++) {
             cs->list_values[i] = cs->list_values[i + 1];
             strncpy(cs->list_strings[i], cs->list_strings[i + 1], 63);
+            cs->list_strings[i][63] = '\0';
           }
           cs->list_count--;
           if (m->sampler_list_index >= cs->list_count && cs->list_count > 0)
@@ -4228,9 +4233,12 @@ ModalResult modal_handle_key(Modal *m, int ch, ModelsFile *mf,
                 if (m->sampler_dict_key[0] && m->sampler_dict_val[0]) {
                   DictEntry *de = &cs->dict_entries[cs->dict_count];
                   strncpy(de->key, m->sampler_dict_key, DICT_KEY_LEN - 1);
+                  de->key[DICT_KEY_LEN - 1] = '\0';
                   de->is_string = m->sampler_dict_val_is_str;
-                  if (de->is_string)
+                  if (de->is_string) {
                     strncpy(de->str_val, m->sampler_dict_val, DICT_VAL_LEN - 1);
+                    de->str_val[DICT_VAL_LEN - 1] = '\0';
+                  }
                   else
                     de->num_val = atof(m->sampler_dict_val);
                   cs->dict_count++;

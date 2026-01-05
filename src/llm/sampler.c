@@ -303,6 +303,7 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
                       char tmp[64] = {0};
                       p = parse_string(p, tmp, sizeof(tmp));
                       strncpy(list_strs[list_cnt], tmp, 63);
+                      list_strs[list_cnt][63] = '\0';
                       list_cnt++;
                     } else if (*p == '-' || (*p >= '0' && *p <= '9')) {
                       list_vals[list_cnt] = parse_double(&p);
@@ -331,11 +332,13 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
                         p++;
                       p = skip_ws(p);
                       strncpy(dict_keys[dict_cnt], dkey, DICT_KEY_LEN - 1);
+                      dict_keys[dict_cnt][DICT_KEY_LEN - 1] = '\0';
                       if (*p == '"') {
                         char dval[DICT_VAL_LEN] = {0};
                         p = parse_string(p, dval, sizeof(dval));
                         strncpy(dict_str_vals[dict_cnt], dval,
                                 DICT_VAL_LEN - 1);
+                        dict_str_vals[dict_cnt][DICT_VAL_LEN - 1] = '\0';
                         dict_is_str[dict_cnt] = true;
                       } else {
                         dict_num_vals[dict_cnt] = parse_double(&p);
@@ -356,9 +359,11 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
             if (cname[0] && s->custom_count < MAX_CUSTOM_SAMPLERS) {
               CustomSampler *cs = &s->custom[s->custom_count];
               strncpy(cs->name, cname, CUSTOM_SAMPLER_NAME_LEN - 1);
+              cs->name[CUSTOM_SAMPLER_NAME_LEN - 1] = '\0';
               cs->type = ctype;
               cs->value = cval;
               strncpy(cs->str_value, cstr, CUSTOM_SAMPLER_STR_LEN - 1);
+              cs->str_value[CUSTOM_SAMPLER_STR_LEN - 1] = '\0';
               cs->min_val = cmin;
               cs->max_val = cmax;
               cs->step =
@@ -367,6 +372,7 @@ bool sampler_load(SamplerSettings *s, ApiType api_type) {
               for (int li = 0; li < list_cnt; li++) {
                 cs->list_values[li] = list_vals[li];
                 strncpy(cs->list_strings[li], list_strs[li], 63);
+                cs->list_strings[li][63] = '\0';
               }
               cs->dict_count = dict_cnt;
               for (int di = 0; di < dict_cnt; di++) {
