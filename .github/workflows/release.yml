@@ -9,23 +9,27 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-20.04
+  build-linux:
+    runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:20.04
+      options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - name: Clone
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Install Linux dependencies
+      - name: Install dependencies
         run: |
+          apt-get update
+          apt-get install -y sudo software-properties-common
+          export DEBIAN_FRONTEND=noninteractive
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install -y cmake libncursesw5-dev libcurl4-openssl-dev gcc-13 g++-13
+          sudo apt-get install -y cmake libncursesw5-dev libcurl4-openssl-dev gcc-13 g++-13 upx-ucl
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
-
-      - name: Install UPX
-        run: |
-          sudo apt-get install -y upx-ucl
 
       - name: Build Linux
         run: |
@@ -65,7 +69,7 @@ jobs:
           path: build/sillytui-macos-arm64
 
   create-release:
-    needs: [build-and-release, build-macos]
+    needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
