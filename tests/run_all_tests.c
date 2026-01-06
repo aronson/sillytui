@@ -53,6 +53,8 @@ extern void run_embedding_tests(void);
 extern void run_embedding_pytorch_tests(void);
 extern void run_sampling_tests(void);
 extern void run_sampling_pytorch_tests(void);
+extern void run_kv_cache_tests(void);
+extern void run_kv_cache_pytorch_tests(void);
 
 int main(int argc, char **argv) {
   (void)argc;
@@ -126,6 +128,8 @@ int main(int argc, char **argv) {
   run_embedding_pytorch_tests();
   run_sampling_tests();
   run_sampling_pytorch_tests();
+  run_kv_cache_tests();
+  run_kv_cache_pytorch_tests();
 
   clock_t end = clock();
   double elapsed = (double)(end - start) / CLOCKS_PER_SEC;

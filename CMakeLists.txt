@@ -106,6 +106,8 @@ set(SOURCES
     src/inference/kernels/embedding/embedding_neon.c
     src/inference/kernels/sampling/sampling.c
     src/inference/kernels/sampling/sampling_neon.c
+    src/inference/kernels/kv_cache/kv_cache.c
+    src/inference/kernels/kv_cache/kv_cache_neon.c
 )
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
@@ -154,6 +156,8 @@ set(TEST_SOURCES
     tests/test_embedding_pytorch_accuracy.cc
     tests/test_sampling.cc
     tests/test_sampling_pytorch_accuracy.cc
+    tests/test_kv_cache.cc
+    tests/test_kv_cache_pytorch_accuracy.cc
     src/core/config.c
     src/core/macros.c
     src/core/time.c
@@ -190,6 +194,8 @@ set(TEST_SOURCES
     src/inference/kernels/embedding/embedding_neon.c
     src/inference/kernels/sampling/sampling.c
     src/inference/kernels/sampling/sampling_neon.c
+    src/inference/kernels/kv_cache/kv_cache.c
+    src/inference/kernels/kv_cache/kv_cache_neon.c
     src/ui/modal.c
     src/ui/ui.c
     src/ui/markdown.c
@@ -305,6 +311,8 @@ set(ALL_TEST_SOURCES
     tests/test_embedding_pytorch_accuracy.cc
     tests/test_sampling.cc
     tests/test_sampling_pytorch_accuracy.cc
+    tests/test_kv_cache.cc
+    tests/test_kv_cache_pytorch_accuracy.cc
     tests/boundary/test_boundary.c
     tests/stress/test_stress.c
     tests/generated/test_unicode_gen.c
@@ -356,6 +364,8 @@ set(ALL_TEST_SOURCES
     src/inference/kernels/embedding/embedding_neon.c
     src/inference/kernels/sampling/sampling.c
     src/inference/kernels/sampling/sampling_neon.c
+    src/inference/kernels/kv_cache/kv_cache.c
+    src/inference/kernels/kv_cache/kv_cache_neon.c
     src/ui/modal.c
     src/ui/ui.c
     src/ui/markdown.c
@@ -506,4 +516,10 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/bench/bench_sampling.c")
   add_executable(bench_sampling bench/bench_sampling.c src/inference/kernels/sampling/sampling.c src/inference/kernels/sampling/sampling_neon.c)
   target_include_directories(bench_sampling PRIVATE src)
   target_compile_options(bench_sampling PRIVATE -O3 -ffast-math)
+endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/bench/bench_kv_cache.c")
+  add_executable(bench_kv_cache bench/bench_kv_cache.c src/inference/kernels/kv_cache/kv_cache.c src/inference/kernels/kv_cache/kv_cache_neon.c)
+  target_include_directories(bench_kv_cache PRIVATE src)
+  target_compile_options(bench_kv_cache PRIVATE -O3 -ffast-math)
 endif()
