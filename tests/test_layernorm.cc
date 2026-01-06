@@ -383,6 +383,7 @@ TEST(layernorm_fused_f16_prefill) {
 }
 
 extern "C" void run_layernorm_tests(void) {
+  TEST_SUITE("LayerNorm (FP32/FP16/BF16)");
   RUN_TEST(layernorm_rms_f32_decode);
   RUN_TEST(layernorm_rms_bf16_decode);
   RUN_TEST(layernorm_rms_f16_decode);

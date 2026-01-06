@@ -131,6 +131,38 @@ extern bool g_current_test_passed;
       FAIL("Expected false: " #cond);                                          \
   } while (0)
 
+#define ASSERT_LT(a, b)                                                        \
+  do {                                                                         \
+    double _a = (a);                                                           \
+    double _b = (b);                                                           \
+    if (!(_a < _b))                                                            \
+      FAIL_FMT("Expected %g < %g", _a, _b);                                    \
+  } while (0)
+
+#define ASSERT_LE(a, b)                                                        \
+  do {                                                                         \
+    double _a = (a);                                                           \
+    double _b = (b);                                                           \
+    if (!(_a <= _b))                                                           \
+      FAIL_FMT("Expected %g <= %g", _a, _b);                                   \
+  } while (0)
+
+#define ASSERT_GT(a, b)                                                        \
+  do {                                                                         \
+    double _a = (a);                                                           \
+    double _b = (b);                                                           \
+    if (!(_a > _b))                                                            \
+      FAIL_FMT("Expected %g > %g", _a, _b);                                    \
+  } while (0)
+
+#define ASSERT_GE(a, b)                                                        \
+  do {                                                                         \
+    double _a = (a);                                                           \
+    double _b = (b);                                                           \
+    if (!(_a >= _b))                                                           \
+      FAIL_FMT("Expected %g >= %g", _a, _b);                                   \
+  } while (0)
+
 static inline void print_test_summary(void) {
   printf("\n\033[1;36m=== Test Summary ===\033[0m\n");
   printf("  Total:  %d\n", g_tests_run);

@@ -1,5 +1,5 @@
 BUILD_DIR ?= build
-SRC_FILES := $(shell find src tests -name '*.c' -o -name '*.h' -o -name '*.cc')
+SRC_FILES := $(shell find src tests -name '*.c' -o -name '*.h' -o -name '*.cc' -o -name '*.cpp')
 
 # Detect platform
 UNAME_M := $(shell uname -m)

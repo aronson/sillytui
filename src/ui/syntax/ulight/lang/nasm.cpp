@@ -14,125 +14,134 @@ namespace ulight {
 namespace nasm {
 
 [[nodiscard]]
-Escape_Result match_escape_sequence(std::u8string_view str)
-{
-    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
-    if (str.length() < 2 || str[0] != u8'\\') {
-        return {};
-    }
-    switch (str[1]) {
-    case u8'\'':
-    case u8'"':
-    case u8'`':
-    case u8'\\':
-    case u8'?':
-    case u8'a':
-    case u8'b':
-    case u8't':
-    case u8'n':
-    case u8'v':
-    case u8'f':
-    case u8'r':
-    case u8'e': {
-        return { .length = 2uz };
-    }
-    case u8'0':
-    case u8'1':
-    case u8'2':
-    case u8'3':
-    case u8'4':
-    case u8'5':
-    case u8'6':
-    case u8'7': {
-        return match_common_escape<Common_Escape::octal_1_to_2>(str, 2);
-    }
-    case u8'x': {
-        return match_common_escape<Common_Escape::hex_1_to_2>(str, 2);
-    }
-    case u8'u': {
-        return match_common_escape<Common_Escape::hex_4>(str, 2);
-    }
-    case u8'U': {
-        return match_common_escape<Common_Escape::hex_8>(str, 2);
-    }
-    default: {
-        return { .length = 2uz, .erroneous = true };
-    }
-    }
+Escape_Result match_escape_sequence(std::u8string_view str) {
+  // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
+  if (str.length() < 2 || str[0] != u8'\\') {
+    return {};
+  }
+  switch (str[1]) {
+  case u8'\'':
+  case u8'"':
+  case u8'`':
+  case u8'\\':
+  case u8'?':
+  case u8'a':
+  case u8'b':
+  case u8't':
+  case u8'n':
+  case u8'v':
+  case u8'f':
+  case u8'r':
+  case u8'e': {
+    return {.length = 2uz};
+  }
+  case u8'0':
+  case u8'1':
+  case u8'2':
+  case u8'3':
+  case u8'4':
+  case u8'5':
+  case u8'6':
+  case u8'7': {
+    return match_common_escape<Common_Escape::octal_1_to_2>(str, 2);
+  }
+  case u8'x': {
+    return match_common_escape<Common_Escape::hex_1_to_2>(str, 2);
+  }
+  case u8'u': {
+    return match_common_escape<Common_Escape::hex_4>(str, 2);
+  }
+  case u8'U': {
+    return match_common_escape<Common_Escape::hex_8>(str, 2);
+  }
+  default: {
+    return {.length = 2uz, .erroneous = true};
+  }
+  }
 }
 
-std::size_t match_operator(std::u8string_view str)
-{
-    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.5
-    if (str.empty()) {
-        return 0;
-    }
-    switch (str[0]) {
-    case u8'?':
-    case u8':':
-    case u8'+':
-    case u8'-':
-    case u8'~': return 1;
-    case u8'!': return str.starts_with(u8"!=") ? 2 : 1;
-    case u8'|': return str.starts_with(u8"||") ? 2 : 1;
-    case u8'&': return str.starts_with(u8"&&") ? 2 : 1;
-    case u8'^': return str.starts_with(u8"^^") ? 2 : 1;
-    case u8'>':
-        return str.starts_with(u8">>>") ? 3 //
-            : str.starts_with(u8">>")   ? 2
-            : str.starts_with(u8">=")   ? 2
-                                        : 1;
-    case u8'<':
-        return str.starts_with(u8"<<<") ? 3 //
-            : str.starts_with(u8"<=>")  ? 3
-            : str.starts_with(u8"<<")   ? 2
-            : str.starts_with(u8"<=")   ? 2
-                                        : 1;
-    case u8'/': return str.starts_with(u8"//") ? 2 : 1;
-    case u8'%': return str.starts_with(u8"%%") ? 2 : 1;
-    default: return 0;
-    }
-    ULIGHT_ASSERT_UNREACHABLE(u8"Logic bug.");
+std::size_t match_operator(std::u8string_view str) {
+  // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.5
+  if (str.empty()) {
+    return 0;
+  }
+  switch (str[0]) {
+  case u8'?':
+  case u8':':
+  case u8'+':
+  case u8'-':
+  case u8'~':
+    return 1;
+  case u8'!':
+    return str.starts_with(u8"!=") ? 2 : 1;
+  case u8'|':
+    return str.starts_with(u8"||") ? 2 : 1;
+  case u8'&':
+    return str.starts_with(u8"&&") ? 2 : 1;
+  case u8'^':
+    return str.starts_with(u8"^^") ? 2 : 1;
+  case u8'>':
+    return str.starts_with(u8">>>")  ? 3 //
+           : str.starts_with(u8">>") ? 2
+           : str.starts_with(u8">=") ? 2
+                                     : 1;
+  case u8'<':
+    return str.starts_with(u8"<<<")   ? 3 //
+           : str.starts_with(u8"<=>") ? 3
+           : str.starts_with(u8"<<")  ? 2
+           : str.starts_with(u8"<=")  ? 2
+                                      : 1;
+  case u8'/':
+    return str.starts_with(u8"//") ? 2 : 1;
+  case u8'%':
+    return str.starts_with(u8"%%") ? 2 : 1;
+  default:
+    return 0;
+  }
+  ULIGHT_ASSERT_UNREACHABLE(u8"Logic bug.");
 }
 
-std::size_t match_identifier(std::u8string_view str)
-{
-    constexpr auto head = [](char8_t c) { return is_nasm_identifier_start(c); };
-    constexpr auto tail = [](char8_t c) { return is_nasm_identifier(c); };
-    return ascii::length_if_head_tail(str, head, tail);
+std::size_t match_identifier(std::u8string_view str) {
+  constexpr auto head = [](char8_t c) { return is_nasm_identifier_start(c); };
+  constexpr auto tail = [](char8_t c) { return is_nasm_identifier(c); };
+  return ascii::length_if_head_tail(str, head, tail);
 }
 
 [[nodiscard]]
-int base_of_suffix_char(char8_t c)
-{
-    switch (c) {
-    case u8'b':
-    case u8'B':
-    case u8'y':
-    case u8'Y': return 2;
-    case u8'q':
-    case u8'Q':
-    case u8'o':
-    case u8'O': return 8;
-    case u8'd':
-    case u8'D':
-    case u8't':
-    case u8'T': return 10;
-    case u8'h':
-    case u8'H':
-    case u8'x':
-    case u8'X': return 16;
-    default: return 0;
-    }
+int base_of_suffix_char(char8_t c) {
+  switch (c) {
+  case u8'b':
+  case u8'B':
+  case u8'y':
+  case u8'Y':
+    return 2;
+  case u8'q':
+  case u8'Q':
+  case u8'o':
+  case u8'O':
+    return 8;
+  case u8'd':
+  case u8'D':
+  case u8't':
+  case u8'T':
+    return 10;
+  case u8'h':
+  case u8'H':
+  case u8'x':
+  case u8'X':
+    return 16;
+  default:
+    return 0;
+  }
 }
 
 namespace {
 
-constexpr std::u8string_view pseudo_instructions[] {
-    u8"db",     u8"dd",   u8"do",   u8"dq", //
-    u8"dt",     u8"dw",   u8"dy",   u8"dz", //
-    u8"equ", //
-    u8"incbin", //
+constexpr std::u8string_view pseudo_instructions[]{
+    u8"db",     u8"dd",   u8"do",   u8"dq",   //
+    u8"dt",     u8"dw",   u8"dy",   u8"dz",   //
+    u8"equ",                                  //
+    u8"incbin",                               //
     u8"resb",   u8"resd", u8"reso", u8"resq", //
     u8"rest",   u8"resw", u8"resy", u8"resz", //
     u8"times",
@@ -140,14 +149,14 @@ constexpr std::u8string_view pseudo_instructions[] {
 
 static_assert(std::ranges::is_sorted(pseudo_instructions));
 
-constexpr std::u8string_view types[] {
+constexpr std::u8string_view types[]{
     u8"byte",  u8"dword", u8"far",  u8"oword", u8"ptr",
     u8"qword", u8"tword", u8"word", u8"yword", u8"zword",
 };
 
 static_assert(std::ranges::is_sorted(types));
 
-constexpr std::u8string_view operator_keywords[] {
+constexpr std::u8string_view operator_keywords[]{
     u8"seg",
     u8"wrt",
 };
@@ -265,13 +274,14 @@ constexpr std::u8string_view registers[] {
 
 static_assert(std::ranges::is_sorted(registers));
 
-constexpr std::u8string_view label_instructions[] {
+constexpr std::u8string_view label_instructions[]{
     u8"call",
 
-    u8"ja",   u8"jae",   u8"jb",     u8"jbe",    u8"jc",    u8"je",   u8"jg",  u8"jge",
-    u8"jl",   u8"jle",   u8"jmp",    u8"jna",    u8"jna",   u8"jnae", u8"jnb", u8"jnbe",
-    u8"jnc",  u8"jne",   u8"jng",    u8"jnge",   u8"jnl",   u8"jnle", u8"jno", u8"jnp",
-    u8"jnz",  u8"jo",    u8"jp",     u8"jpe",    u8"jpo",   u8"js",   u8"jz",
+    u8"ja",   u8"jae",   u8"jb",     u8"jbe",    u8"jc",    u8"je",   u8"jg",
+    u8"jge",  u8"jl",    u8"jle",    u8"jmp",    u8"jna",   u8"jna",  u8"jnae",
+    u8"jnb",  u8"jnbe",  u8"jnc",    u8"jne",    u8"jng",   u8"jnge", u8"jnl",
+    u8"jnle", u8"jno",   u8"jnp",    u8"jnz",    u8"jo",    u8"jp",   u8"jpe",
+    u8"jpo",  u8"js",    u8"jz",
 
     u8"loop", u8"loope", u8"loopne", u8"loopnz", u8"loopz",
 };
@@ -279,60 +289,53 @@ constexpr std::u8string_view label_instructions[] {
 static_assert(std::ranges::is_sorted(label_instructions));
 
 [[nodiscard]]
-constexpr bool binary_search_case_insensitive(
-    std::span<const std::u8string_view> haystack,
-    std::u8string_view needle
-)
-{
-    constexpr auto case_insensitive_less = [](std::u8string_view x, std::u8string_view y) {
-        return ascii::compare_to_lower(x, y) < 0;
-    };
-    return std::ranges::binary_search(haystack, needle, case_insensitive_less);
+constexpr bool
+binary_search_case_insensitive(std::span<const std::u8string_view> haystack,
+                               std::u8string_view needle) {
+  constexpr auto case_insensitive_less = [](std::u8string_view x,
+                                            std::u8string_view y) {
+    return ascii::compare_to_lower(x, y) < 0;
+  };
+  return std::ranges::binary_search(haystack, needle, case_insensitive_less);
 }
 
 [[nodiscard]]
-constexpr Base_Suffix determine_suffix(std::u8string_view str)
-{
-    if (str.empty()) {
-        return {};
-    }
-    const int base = base_of_suffix_char(str.back());
-    if (base <= 0) {
-        return {};
-    }
-    return { .length = 1, .base = base };
+constexpr Base_Suffix determine_suffix(std::u8string_view str) {
+  if (str.empty()) {
+    return {};
+  }
+  const int base = base_of_suffix_char(str.back());
+  if (base <= 0) {
+    return {};
+  }
+  return {.length = 1, .base = base};
 }
 
 } // namespace
 
 [[nodiscard]]
-bool is_pseudo_instruction(std::u8string_view name) noexcept
-{
-    return binary_search_case_insensitive(pseudo_instructions, name);
+bool is_pseudo_instruction(std::u8string_view name) noexcept {
+  return binary_search_case_insensitive(pseudo_instructions, name);
 }
 
 [[nodiscard]]
-bool is_type(std::u8string_view name) noexcept
-{
-    return binary_search_case_insensitive(types, name);
+bool is_type(std::u8string_view name) noexcept {
+  return binary_search_case_insensitive(types, name);
 }
 
 [[nodiscard]]
-bool is_operator_keyword(std::u8string_view name) noexcept
-{
-    return binary_search_case_insensitive(operator_keywords, name);
+bool is_operator_keyword(std::u8string_view name) noexcept {
+  return binary_search_case_insensitive(operator_keywords, name);
 }
 
 [[nodiscard]]
-bool is_register(std::u8string_view name) noexcept
-{
-    return binary_search_case_insensitive(registers, name);
+bool is_register(std::u8string_view name) noexcept {
+  return binary_search_case_insensitive(registers, name);
 }
 
 [[nodiscard]]
-bool is_label_instruction(std::u8string_view name) noexcept
-{
-    return binary_search_case_insensitive(label_instructions, name);
+bool is_label_instruction(std::u8string_view name) noexcept {
+  return binary_search_case_insensitive(label_instructions, name);
 }
 
 namespace {
@@ -341,343 +344,326 @@ constexpr char8_t digit_separator = u8'_';
 
 struct Highlighter : Highlighter_Base {
 private:
-    /// @brief A fallback highlight for identifiers when we cannot otherwise tell
-    /// how an identifier should be highlighted.
-    Highlight_Type id_highlight = Highlight_Type::name_instruction;
+  /// @brief A fallback highlight for identifiers when we cannot otherwise tell
+  /// how an identifier should be highlighted.
+  Highlight_Type id_highlight = Highlight_Type::name_instruction;
 
 public:
-    Highlighter(
-        Non_Owning_Buffer<Token>& out,
-        std::u8string_view source,
-        std::pmr::memory_resource* memory,
-        const Highlight_Options& options
-    )
-        : Highlighter_Base { out, source, memory, options }
-    {
-    }
+  Highlighter(Non_Owning_Buffer<Token> &out, std::u8string_view source,
+              std::pmr::memory_resource *memory,
+              const Highlight_Options &options)
+      : Highlighter_Base{out, source, memory, options} {}
 
-    bool operator()()
-    {
-        while (!eof()) {
-            consume_anything();
-        }
-        return true;
+  bool operator()() {
+    while (!eof()) {
+      consume_anything();
     }
+    return true;
+  }
 
 private:
-    void consume_anything()
-    {
+  void consume_anything() {
 
-        switch (const char8_t c = remainder[0]) {
-        case u8' ':
-        case u8'\t': {
-            advance(1);
-            break;
-        }
-        case u8'\r':
-        case u8'\n': {
-            id_highlight = Highlight_Type::name_instruction;
-            advance(1);
-            break;
-        }
-
-        case u8'0':
-        case u8'1':
-        case u8'2':
-        case u8'3':
-        case u8'4':
-        case u8'5':
-        case u8'6':
-        case u8'7':
-        case u8'8':
-        case u8'9': {
-            const bool success = expect_number();
-            ULIGHT_ASSERT(success);
-            break;
-        }
-        case u8'"':
-        case u8'\'':
-        case u8'`': {
-            consume_string(c);
-            break;
-        }
-        case u8'(':
-        case u8')': {
-            emit_and_advance(1, Highlight_Type::symbol_parens);
-            break;
-        }
-        case u8'[':
-        case u8']': {
-            emit_and_advance(1, Highlight_Type::symbol_square);
-            break;
-        }
-        case u8'{':
-        case u8'}': {
-            emit_and_advance(1, Highlight_Type::symbol_brace);
-            break;
-        }
-        case u8',': {
-            emit_and_advance(1, Highlight_Type::symbol_punc);
-            break;
-        }
-        case u8';': {
-            consume_comment();
-            break;
-        }
-        case u8'%': {
-            consume_macro();
-            break;
-        }
-
-        default: {
-            if (const std::size_t op_length = match_operator(remainder)) {
-                emit_and_advance(op_length, Highlight_Type::symbol_op);
-                break;
-            }
-            if (expect_number()) {
-                break;
-            }
-            if (is_nasm_identifier_start(c)) {
-                consume_identifier();
-                break;
-            }
-            emit_and_advance(1, Highlight_Type::error, Coalescing::forced);
-            break;
-        }
-        }
+    switch (const char8_t c = remainder[0]) {
+    case u8' ':
+    case u8'\t': {
+      advance(1);
+      break;
+    }
+    case u8'\r':
+    case u8'\n': {
+      id_highlight = Highlight_Type::name_instruction;
+      advance(1);
+      break;
     }
 
-    void consume_comment()
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.1
-        ULIGHT_ASSERT(remainder.starts_with(u8';'));
-        emit_and_advance(1, Highlight_Type::comment_delim);
-        const Line_Result line = match_crlf_line(remainder);
-        if (line.content_length != 0) {
-            emit_and_advance(line.content_length, Highlight_Type::comment);
-        }
-        advance(line.terminator_length);
-        id_highlight = Highlight_Type::name_instruction;
+    case u8'0':
+    case u8'1':
+    case u8'2':
+    case u8'3':
+    case u8'4':
+    case u8'5':
+    case u8'6':
+    case u8'7':
+    case u8'8':
+    case u8'9': {
+      const bool success = expect_number();
+      ULIGHT_ASSERT(success);
+      break;
+    }
+    case u8'"':
+    case u8'\'':
+    case u8'`': {
+      consume_string(c);
+      break;
+    }
+    case u8'(':
+    case u8')': {
+      emit_and_advance(1, Highlight_Type::symbol_parens);
+      break;
+    }
+    case u8'[':
+    case u8']': {
+      emit_and_advance(1, Highlight_Type::symbol_square);
+      break;
+    }
+    case u8'{':
+    case u8'}': {
+      emit_and_advance(1, Highlight_Type::symbol_brace);
+      break;
+    }
+    case u8',': {
+      emit_and_advance(1, Highlight_Type::symbol_punc);
+      break;
+    }
+    case u8';': {
+      consume_comment();
+      break;
+    }
+    case u8'%': {
+      consume_macro();
+      break;
     }
 
-    void consume_macro()
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc4.html
-        ULIGHT_ASSERT(remainder.starts_with(u8'%'));
-        const Line_Result line = match_crlf_line(remainder.substr(1));
-        emit_and_advance(line.content_length + 1, Highlight_Type::name_macro);
-        advance(line.terminator_length);
-        id_highlight = Highlight_Type::name_instruction;
+    default: {
+      if (const std::size_t op_length = match_operator(remainder)) {
+        emit_and_advance(op_length, Highlight_Type::symbol_op);
+        break;
+      }
+      if (expect_number()) {
+        break;
+      }
+      if (is_nasm_identifier_start(c)) {
+        consume_identifier();
+        break;
+      }
+      emit_and_advance(1, Highlight_Type::error, Coalescing::forced);
+      break;
     }
-
-    void consume_identifier()
-    {
-        const std::size_t length = match_identifier(remainder);
-        ULIGHT_ASSUME(length > 0);
-        const std::u8string_view identifier = remainder.substr(0, length);
-        if (ascii::equals_ignore_case(identifier, u8"seg")
-            || ascii::equals_ignore_case(identifier, u8"wrt")) {
-            emit_and_advance(length, Highlight_Type::keyword_op);
-            return;
-        }
-        if (length < remainder.length() && remainder[length] == u8':') {
-            emit_and_advance(length + 1, Highlight_Type::name_label_decl);
-            id_highlight = Highlight_Type::name_instruction;
-            return;
-        }
-        if (remainder.starts_with(u8'.')) {
-            emit_and_advance(length, Highlight_Type::name_label_decl);
-            id_highlight = Highlight_Type::name_instruction;
-            return;
-        }
-        if (is_type(identifier)) {
-            emit_and_advance(length, Highlight_Type::keyword_type);
-            id_highlight = Highlight_Type::name_var;
-            return;
-        }
-        if (is_operator_keyword(identifier)) {
-            emit_and_advance(length, Highlight_Type::keyword_op);
-            id_highlight = Highlight_Type::name_var;
-            return;
-        }
-        if (is_register(identifier)) {
-            emit_and_advance(length, Highlight_Type::name_var);
-            id_highlight = Highlight_Type::name_var;
-            return;
-        }
-        if (is_label_instruction(identifier)) {
-            emit_and_advance(length, Highlight_Type::name_instruction);
-            id_highlight = Highlight_Type::name_label;
-            return;
-        }
-        if (identifier.starts_with(u8'$')) {
-            emit_and_advance(length, Highlight_Type::name);
-            id_highlight = Highlight_Type::name_var;
-            return;
-        }
-        emit_and_advance(length, id_highlight);
-        if (id_highlight == Highlight_Type::name_instruction) {
-            id_highlight = Highlight_Type::name_var;
-        }
     }
+  }
 
-    bool expect_number()
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.1
-        return expect_suffixed_number() || expect_common_number();
+  void consume_comment() {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.1
+    ULIGHT_ASSERT(remainder.starts_with(u8';'));
+    emit_and_advance(1, Highlight_Type::comment_delim);
+    const Line_Result line = match_crlf_line(remainder);
+    if (line.content_length != 0) {
+      emit_and_advance(line.content_length, Highlight_Type::comment);
     }
+    advance(line.terminator_length);
+    id_highlight = Highlight_Type::name_instruction;
+  }
 
-    bool expect_common_number()
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.1
-        static constexpr Number_Prefix prefixes[] {
-            { u8"0b", 2 },  { u8"0B", 2 },  { u8"0y", 2 },  { u8"0Y", 2 }, //
-            { u8"0o", 8 },  { u8"0O", 8 },  { u8"0q", 8 },  { u8"0Q", 8 }, //
-            { u8"0d", 10 }, { u8"0D", 10 }, { u8"0t", 10 }, { u8"0T", 10 }, //
-            { u8"0x", 16 }, { u8"0X", 16 }, { u8"0h", 16 }, { u8"0H", 16 }, { u8"$", 16 }, //
-        };
-        static constexpr Exponent_Separator exponent_separators[] {
-            { u8"e", 10 }, { u8"e+", 10 }, { u8"e-", 10 }, //
-            { u8"E", 10 }, { u8"E+", 10 }, { u8"E-", 10 }, //
-            { u8"p", 16 }, { u8"p+", 16 }, { u8"p-", 16 }, //
-            { u8"P", 16 }, { u8"P+", 16 }, { u8"P", 16 }, //
-        };
-        static constexpr Common_Number_Options options //
-            { .prefixes = prefixes,
-              .exponent_separators = exponent_separators,
-              .digit_separator = digit_separator };
-        const Common_Number_Result result = match_common_number(remainder, options);
-        if (!result) {
-            return false;
-        }
-        highlight_number(result, digit_separator);
+  void consume_macro() {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc4.html
+    ULIGHT_ASSERT(remainder.starts_with(u8'%'));
+    const Line_Result line = match_crlf_line(remainder.substr(1));
+    emit_and_advance(line.content_length + 1, Highlight_Type::name_macro);
+    advance(line.terminator_length);
+    id_highlight = Highlight_Type::name_instruction;
+  }
+
+  void consume_identifier() {
+    const std::size_t length = match_identifier(remainder);
+    ULIGHT_ASSUME(length > 0);
+    const std::u8string_view identifier = remainder.substr(0, length);
+    if (ascii::equals_ignore_case(identifier, u8"seg") ||
+        ascii::equals_ignore_case(identifier, u8"wrt")) {
+      emit_and_advance(length, Highlight_Type::keyword_op);
+      return;
+    }
+    if (length < remainder.length() && remainder[length] == u8':') {
+      emit_and_advance(length + 1, Highlight_Type::name_label_decl);
+      id_highlight = Highlight_Type::name_instruction;
+      return;
+    }
+    if (remainder.starts_with(u8'.')) {
+      emit_and_advance(length, Highlight_Type::name_label_decl);
+      id_highlight = Highlight_Type::name_instruction;
+      return;
+    }
+    if (is_type(identifier)) {
+      emit_and_advance(length, Highlight_Type::keyword_type);
+      id_highlight = Highlight_Type::name_var;
+      return;
+    }
+    if (is_operator_keyword(identifier)) {
+      emit_and_advance(length, Highlight_Type::keyword_op);
+      id_highlight = Highlight_Type::name_var;
+      return;
+    }
+    if (is_register(identifier)) {
+      emit_and_advance(length, Highlight_Type::name_var);
+      id_highlight = Highlight_Type::name_var;
+      return;
+    }
+    if (is_label_instruction(identifier)) {
+      emit_and_advance(length, Highlight_Type::name_instruction);
+      id_highlight = Highlight_Type::name_label;
+      return;
+    }
+    if (identifier.starts_with(u8'$')) {
+      emit_and_advance(length, Highlight_Type::name);
+      id_highlight = Highlight_Type::name_var;
+      return;
+    }
+    emit_and_advance(length, id_highlight);
+    if (id_highlight == Highlight_Type::name_instruction) {
+      id_highlight = Highlight_Type::name_var;
+    }
+  }
+
+  bool expect_number() {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.1
+    return expect_suffixed_number() || expect_common_number();
+  }
+
+  bool expect_common_number() {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.1
+    static constexpr Number_Prefix prefixes[]{
+        {u8"0b", 2},  {u8"0B", 2},  {u8"0y", 2},  {u8"0Y", 2},               //
+        {u8"0o", 8},  {u8"0O", 8},  {u8"0q", 8},  {u8"0Q", 8},               //
+        {u8"0d", 10}, {u8"0D", 10}, {u8"0t", 10}, {u8"0T", 10},              //
+        {u8"0x", 16}, {u8"0X", 16}, {u8"0h", 16}, {u8"0H", 16}, {u8"$", 16}, //
+    };
+    static constexpr Exponent_Separator exponent_separators[]{
+        {u8"e", 10}, {u8"e+", 10}, {u8"e-", 10}, //
+        {u8"E", 10}, {u8"E+", 10}, {u8"E-", 10}, //
+        {u8"p", 16}, {u8"p+", 16}, {u8"p-", 16}, //
+        {u8"P", 16}, {u8"P+", 16}, {u8"P", 16},  //
+    };
+    static constexpr Common_Number_Options options //
+        {.prefixes = prefixes,
+         .exponent_separators = exponent_separators,
+         .digit_separator = digit_separator};
+    const Common_Number_Result result = match_common_number(remainder, options);
+    if (!result) {
+      return false;
+    }
+    highlight_number(result, digit_separator);
+    return true;
+  }
+
+  bool expect_suffixed_number() {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.1
+    const Suffix_Number_Result suffixed = match_suffix_number(
+        remainder, Constant<&determine_suffix>{}, digit_separator);
+    if (!suffixed) {
+      return false;
+    }
+    if (suffixed.base == 16) {
+      // In the case of hex numbers, there are actually some insane ambiguities.
+      // For example, "eax" could technically be parsed as hexadecimal digits
+      // "ea" followed by the suffix "x".
+      // The only thing we can really do in this case is detect special cases
+      // that shouldn't be parsed as numbers.
+      const std::u8string_view number =
+          remainder.substr(0, suffixed.digits + 1);
+      if (is_pseudo_instruction(number)) {
+        emit_and_advance(number.length(),
+                         Highlight_Type::name_instruction_pseudo);
         return true;
-    }
-
-    bool expect_suffixed_number()
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.1
-        const Suffix_Number_Result suffixed
-            = match_suffix_number(remainder, Constant<&determine_suffix> {}, digit_separator);
-        if (!suffixed) {
-            return false;
-        }
-        if (suffixed.base == 16) {
-            // In the case of hex numbers, there are actually some insane ambiguities.
-            // For example, "eax" could technically be parsed as hexadecimal digits
-            // "ea" followed by the suffix "x".
-            // The only thing we can really do in this case is detect special cases that shouldn't
-            // be parsed as numbers.
-            const std::u8string_view number = remainder.substr(0, suffixed.digits + 1);
-            if (is_pseudo_instruction(number)) {
-                emit_and_advance(number.length(), Highlight_Type::name_instruction_pseudo);
-                return true;
-            }
-            if (is_register(number)) {
-                emit_and_advance(number.length(), Highlight_Type::name_var);
-                return true;
-            }
-        }
-        if (suffixed.erroneous) {
-            emit_and_advance(suffixed.digits + suffixed.suffix, Highlight_Type::error);
-            return true;
-        }
-        highlight_digits(remainder.substr(0, suffixed.digits), digit_separator);
-        emit_and_advance(suffixed.suffix, Highlight_Type::number_decor);
+      }
+      if (is_register(number)) {
+        emit_and_advance(number.length(), Highlight_Type::name_var);
         return true;
+      }
     }
+    if (suffixed.erroneous) {
+      emit_and_advance(suffixed.digits + suffixed.suffix,
+                       Highlight_Type::error);
+      return true;
+    }
+    highlight_digits(remainder.substr(0, suffixed.digits), digit_separator);
+    emit_and_advance(suffixed.suffix, Highlight_Type::number_decor);
+    return true;
+  }
 
-    void consume_string(char8_t quote_char)
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
-        ULIGHT_ASSERT(remainder.starts_with(quote_char));
+  void consume_string(char8_t quote_char) {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
+    ULIGHT_ASSERT(remainder.starts_with(quote_char));
+    emit_and_advance(1, Highlight_Type::string_delim);
+
+    if (quote_char == u8'\'' || quote_char == u8'"') {
+      consume_verbatim_string_content(quote_char);
+    } else {
+      consume_backquote_string_content();
+    }
+  }
+
+  void consume_verbatim_string_content(char8_t quote_char) {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
+    const auto is_string_end = [quote_char](char8_t c) {
+      return c == u8'\n' || c == u8'\r' || c == quote_char;
+    };
+    if (const std::size_t length =
+            ascii::length_if_not(remainder, is_string_end)) {
+      emit_and_advance(length, Highlight_Type::string);
+    }
+    if (remainder.starts_with(quote_char)) {
+      emit_and_advance(1, Highlight_Type::string_delim);
+    }
+  }
+
+  void consume_backquote_string_content() {
+    // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
+
+    std::size_t length = 0;
+    const auto flush = [&] {
+      if (length != 0) {
+        emit_and_advance(length, Highlight_Type::string);
+        length = 0;
+      }
+    };
+
+    while (length < remainder.length()) {
+      switch (remainder[length]) {
+      case u8'\n':
+      case u8'\r':
+      case u8'\v': {
+        flush();
+        return;
+      }
+      case u8'`': {
+        flush();
         emit_and_advance(1, Highlight_Type::string_delim);
-
-        if (quote_char == u8'\'' || quote_char == u8'"') {
-            consume_verbatim_string_content(quote_char);
+        return;
+      }
+      case u8'\\': {
+        flush();
+        if (!expect_escape()) {
+          emit_and_advance(1, Highlight_Type::error);
         }
-        else {
-            consume_backquote_string_content();
-        }
+        break;
+      }
+      default: {
+        ++length;
+        break;
+      }
+      }
     }
+  }
 
-    void consume_verbatim_string_content(char8_t quote_char)
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
-        const auto is_string_end
-            = [quote_char](char8_t c) { return c == u8'\n' || c == u8'\r' || c == quote_char; };
-        if (const std::size_t length = ascii::length_if_not(remainder, is_string_end)) {
-            emit_and_advance(length, Highlight_Type::string);
-        }
-        if (remainder.starts_with(quote_char)) {
-            emit_and_advance(1, Highlight_Type::string_delim);
-        }
+  bool expect_escape() {
+    if (const Escape_Result escape = match_escape_sequence(remainder)) {
+      const auto highlight = escape.erroneous ? Highlight_Type::error
+                                              : Highlight_Type::string_escape;
+      emit_and_advance(escape.length, highlight);
+      return true;
     }
-
-    void consume_backquote_string_content()
-    {
-        // https://www.nasm.us/xdoc/2.16.03/html/nasmdoc3.html#section-3.4.2
-
-        std::size_t length = 0;
-        const auto flush = [&] {
-            if (length != 0) {
-                emit_and_advance(length, Highlight_Type::string);
-                length = 0;
-            }
-        };
-
-        while (length < remainder.length()) {
-            switch (remainder[length]) {
-            case u8'\n':
-            case u8'\r':
-            case u8'\v': {
-                flush();
-                return;
-            }
-            case u8'`': {
-                flush();
-                emit_and_advance(1, Highlight_Type::string_delim);
-                return;
-            }
-            case u8'\\': {
-                flush();
-                if (!expect_escape()) {
-                    emit_and_advance(1, Highlight_Type::error);
-                }
-                break;
-            }
-            default: {
-                ++length;
-                break;
-            }
-            }
-        }
-    }
-
-    bool expect_escape()
-    {
-        if (const Escape_Result escape = match_escape_sequence(remainder)) {
-            const auto highlight
-                = escape.erroneous ? Highlight_Type::error : Highlight_Type::string_escape;
-            emit_and_advance(escape.length, highlight);
-            return true;
-        }
-        return false;
-    }
+    return false;
+  }
 };
 
 } // namespace
 
 } // namespace nasm
 
-bool highlight_nasm(
-    Non_Owning_Buffer<Token>& out,
-    std::u8string_view source,
-    std::pmr::memory_resource* memory,
-    const Highlight_Options& options
-)
-{
-    return nasm::Highlighter { out, source, memory, options }();
+bool highlight_nasm(Non_Owning_Buffer<Token> &out, std::u8string_view source,
+                    std::pmr::memory_resource *memory,
+                    const Highlight_Options &options) {
+  return nasm::Highlighter{out, source, memory, options}();
 }
 
 } // namespace ulight
