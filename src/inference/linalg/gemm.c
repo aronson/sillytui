@@ -9,6 +9,11 @@
 #include <unistd.h>
 #endif
 
+#if defined(__APPLE__)
+#include <Accelerate/Accelerate.h>
+#define HAS_ACCELERATE 1
+#endif
+
 static int g_num_threads = 0;
 
 static int get_cpu_count(void) {
@@ -185,7 +190,22 @@ void gemm_f32(const float *A, const float *B, float *C, int M, int N, int K,
   if (M <= 0 || N <= 0 || K <= 0)
     return;
 
+#ifdef HAS_ACCELERATE
+  enum CBLAS_TRANSPOSE transA = transpose_A ? CblasTrans : CblasNoTrans;
+  enum CBLAS_TRANSPOSE transB = transpose_B ? CblasTrans : CblasNoTrans;
+  int lda = transpose_B ? K : N;
+  int ldb = transpose_A ? M : K;
+  int ldc = N;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  cblas_sgemm(CblasColMajor, transB, transA, N, M, K, 1.0f, B, lda, A, ldb,
+              0.0f, C, ldc);
+#pragma clang diagnostic pop
+  return;
+#endif
+
   gemm_caps_t caps = gemm_get_capabilities();
+
   if (caps.has_neon && !transpose_A && !transpose_B) {
     int nt = gemm_get_num_threads();
     long long flops = (long long)M * N * K * 2;

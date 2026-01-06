@@ -109,6 +109,9 @@ target_compile_definitions(sillytui PRIVATE _XOPEN_SOURCE_EXTENDED NCURSES_WIDEC
 target_include_directories(sillytui PRIVATE ${CURSES_INCLUDE_DIR} ${CURL_INCLUDE_DIRS} src src/ui/syntax/ulight/include)
 find_package(Threads REQUIRED)
 target_link_libraries(sillytui PRIVATE ${CURSES_LIBRARIES} ${CURL_LIBRARIES} Threads::Threads)
+if(APPLE)
+    target_link_libraries(sillytui PRIVATE "-framework Accelerate")
+endif()
 
 set(TEST_SOURCES
     tests/run_tests.c
@@ -167,6 +170,9 @@ add_executable(run_tests ${TEST_SOURCES} ${ULIGHT_SOURCES})
 target_compile_definitions(run_tests PRIVATE _XOPEN_SOURCE_EXTENDED NCURSES_WIDECHAR=1)
 target_include_directories(run_tests PRIVATE ${CURSES_INCLUDE_DIR} src tests src/ui/syntax/ulight/include)
 target_link_libraries(run_tests PRIVATE ${CURSES_LIBRARIES} ${CURL_LIBRARIES} m Threads::Threads)
+if(APPLE)
+    target_link_libraries(run_tests PRIVATE "-framework Accelerate")
+endif()
 set_source_files_properties(tests/test_safetensors.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 set_source_files_properties(tests/test_gemm.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 
@@ -215,6 +221,9 @@ add_executable(run_integration_tests ${INTEGRATION_TEST_SOURCES} ${ULIGHT_SOURCE
 target_compile_definitions(run_integration_tests PRIVATE _XOPEN_SOURCE_EXTENDED NCURSES_WIDECHAR=1)
 target_include_directories(run_integration_tests PRIVATE ${CURSES_INCLUDE_DIR} src tests tests/integration src/ui/syntax/ulight/include)
 target_link_libraries(run_integration_tests PRIVATE ${CURSES_LIBRARIES} ${CURL_LIBRARIES} m Threads::Threads)
+if(APPLE)
+    target_link_libraries(run_integration_tests PRIVATE "-framework Accelerate")
+endif()
 
 add_test(NAME integration_tests COMMAND run_integration_tests)
 
@@ -291,6 +300,9 @@ set_source_files_properties(${ULIGHT_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-tri
 target_compile_definitions(run_all_tests PRIVATE _XOPEN_SOURCE_EXTENDED NCURSES_WIDECHAR=1)
 target_include_directories(run_all_tests PRIVATE ${CURSES_INCLUDE_DIR} src tests tests/boundary tests/stress tests/generated tests/property src/ui/syntax/ulight/include)
 target_link_libraries(run_all_tests PRIVATE ${CURSES_LIBRARIES} ${CURL_LIBRARIES} m Threads::Threads)
+if(APPLE)
+    target_link_libraries(run_all_tests PRIVATE "-framework Accelerate")
+endif()
 set_source_files_properties(tests/test_safetensors.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 
 add_test(NAME all_tests COMMAND run_all_tests)
@@ -340,6 +352,9 @@ add_executable(bench_gemm bench/bench_gemm.c src/inference/linalg/gemm.c src/inf
 target_include_directories(bench_gemm PRIVATE src)
 target_compile_options(bench_gemm PRIVATE -O3 -ffast-math)
 target_link_libraries(bench_gemm PRIVATE Threads::Threads)
+if(APPLE)
+    target_link_libraries(bench_gemm PRIVATE "-framework Accelerate")
+endif()
 
 add_executable(profile_gemm bench/profile_gemm.c src/inference/linalg/gemm.c src/inference/linalg/gemm_neon.c)
 target_include_directories(profile_gemm PRIVATE src)

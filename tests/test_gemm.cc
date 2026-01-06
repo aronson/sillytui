@@ -6,6 +6,7 @@
 
 extern "C" {
 #include "inference/linalg/gemm.h"
+#include "inference/linalg/gemm_kernels.h"
 }
 
 static void naive_matmul_f32(
@@ -253,9 +254,99 @@ TEST(gemm_f32_m1_decode_path) {
   PASS();
 }
 
+TEST(gemm_f32_exact_16x16) {
+  const int M = 16, N = 16, K = 32;
+  float *A = (float *)malloc(M * K * sizeof(float));
+  float *B = (float *)malloc(K * N * sizeof(float));
+  float *C = (float *)malloc(M * N * sizeof(float));
+  float *expected = (float *)malloc(M * N * sizeof(float));
+
+  for (int i = 0; i < M * K; i++) A[i] = (float)(i % 17) * 0.1f - 0.8f;
+  for (int i = 0; i < K * N; i++) B[i] = (float)(i % 13) * 0.15f - 0.9f;
+
+  gemm_f32(A, B, C, M, N, K, false, false);
+  naive_matmul_f32(A, B, expected, M, N, K);
+
+  for (int i = 0; i < M * N; i++) {
+    ASSERT_NEAR(expected[i], C[i], 1e-3);
+  }
+
+  free(A); free(B); free(C); free(expected);
+  PASS();
+}
+
+TEST(gemm_f32_tail_m23_n19) {
+  const int M = 23, N = 19, K = 64;
+  float *A = (float *)malloc(M * K * sizeof(float));
+  float *B = (float *)malloc(K * N * sizeof(float));
+  float *C = (float *)malloc(M * N * sizeof(float));
+  float *expected = (float *)malloc(M * N * sizeof(float));
+
+  for (int i = 0; i < M * K; i++) A[i] = (float)(i % 11) * 0.2f - 1.0f;
+  for (int i = 0; i < K * N; i++) B[i] = (float)(i % 7) * 0.25f - 0.8f;
+
+  gemm_f32(A, B, C, M, N, K, false, false);
+  naive_matmul_f32(A, B, expected, M, N, K);
+
+  for (int i = 0; i < M * N; i++) {
+    ASSERT_NEAR(expected[i], C[i], 1e-3);
+  }
+
+  free(A); free(B); free(C); free(expected);
+  PASS();
+}
+
+TEST(gemm_f32_large_256x256) {
+  const int M = 256, N = 256, K = 128;
+  float *A = (float *)malloc(M * K * sizeof(float));
+  float *B = (float *)malloc(K * N * sizeof(float));
+  float *C = (float *)malloc(M * N * sizeof(float));
+  float *expected = (float *)malloc(M * N * sizeof(float));
+
+  for (int i = 0; i < M * K; i++) A[i] = (float)(i % 31) * 0.05f - 0.75f;
+  for (int i = 0; i < K * N; i++) B[i] = (float)(i % 23) * 0.04f - 0.46f;
+
+  gemm_f32(A, B, C, M, N, K, false, false);
+  naive_matmul_f32(A, B, expected, M, N, K);
+
+  float max_err = 0.0f;
+  for (int i = 0; i < M * N; i++) {
+    float err = fabsf(expected[i] - C[i]);
+    if (err > max_err) max_err = err;
+  }
+  ASSERT_TRUE(max_err < 0.01f);
+
+  free(A); free(B); free(C); free(expected);
+  PASS();
+}
+
+TEST(gemm_f32_large_512x256) {
+  const int M = 512, N = 256, K = 128;
+  float *A = (float *)malloc(M * K * sizeof(float));
+  float *B = (float *)malloc(K * N * sizeof(float));
+  float *C = (float *)malloc(M * N * sizeof(float));
+  float *expected = (float *)malloc(M * N * sizeof(float));
+
+  for (int i = 0; i < M * K; i++) A[i] = (float)(i % 29) * 0.03f - 0.4f;
+  for (int i = 0; i < K * N; i++) B[i] = (float)(i % 19) * 0.05f - 0.5f;
+
+  gemm_f32(A, B, C, M, N, K, false, false);
+  naive_matmul_f32(A, B, expected, M, N, K);
+
+  float max_err = 0.0f;
+  for (int i = 0; i < M * N; i++) {
+    float err = fabsf(expected[i] - C[i]);
+    if (err > max_err) max_err = err;
+  }
+  ASSERT_TRUE(max_err < 0.01f);
+
+  free(A); free(B); free(C); free(expected);
+  PASS();
+}
+
 extern "C" {
 void run_gemm_tests(void) {
-  TEST_SUITE("GEMM (FP16/BF16)");
+  TEST_SUITE("GEMM (FP32/FP16/BF16)");
   RUN_TEST(gemm_f32_identity_small);
   RUN_TEST(gemm_f32_simple_multiply);
   RUN_TEST(gemm_f32_with_hadamard_12x12);
@@ -265,6 +356,10 @@ void run_gemm_tests(void) {
   RUN_TEST(gemm_f16_small_matrix);
   RUN_TEST(gemm_f32_zero_dimensions);
   RUN_TEST(gemm_f32_m1_decode_path);
+  RUN_TEST(gemm_f32_exact_16x16);
+  RUN_TEST(gemm_f32_tail_m23_n19);
+  RUN_TEST(gemm_f32_large_256x256);
+  RUN_TEST(gemm_f32_large_512x256);
 }
 }
 
