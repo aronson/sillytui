@@ -1,4 +1,4 @@
-#include "inference/model/attention_layer.h"
+#include "attention_layer.h"
 #include "inference/kernels/gemm/gemm.h"
 #include "inference/kernels/kv_cache/kv_cache.h"
 #include "inference/kernels/norm/layernorm.h"

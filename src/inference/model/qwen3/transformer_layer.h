@@ -1,8 +1,8 @@
 #ifndef QWEN3_TRANSFORMER_LAYER_H
 #define QWEN3_TRANSFORMER_LAYER_H
 
-#include "inference/model/config.h"
-#include "inference/model/weights.h"
+#include "config.h"
+#include "weights.h"
 #include <stddef.h>
 
 void qwen3_transformer_layer_f32(float *output, const float *input,

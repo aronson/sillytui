@@ -1,7 +1,7 @@
 #ifndef QWEN3_WEIGHTS_H
 #define QWEN3_WEIGHTS_H
 
-#include "inference/model/config.h"
+#include "config.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

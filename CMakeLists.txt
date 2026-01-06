@@ -108,12 +108,13 @@ set(SOURCES
     src/inference/kernels/sampling/sampling_neon.c
     src/inference/kernels/kv_cache/kv_cache.c
     src/inference/kernels/kv_cache/kv_cache_neon.c
-    src/inference/model/config.c
-    src/inference/model/weights.c
-    src/inference/model/ffn.c
-    src/inference/model/attention_layer.c
-    src/inference/model/transformer_layer.c
-    src/inference/model/qwen3.c
+    src/inference/model/base.c
+    src/inference/model/qwen3/config.c
+    src/inference/model/qwen3/weights.c
+    src/inference/model/qwen3/ffn.c
+    src/inference/model/qwen3/attention_layer.c
+    src/inference/model/qwen3/transformer_layer.c
+    src/inference/model/qwen3/qwen3.c
 )
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
@@ -443,12 +444,13 @@ target_compile_options(load_model PRIVATE
 
 add_executable(qwen3_inference 
     examples/qwen3_inference.c
-    src/inference/model/config.c
-    src/inference/model/weights.c
-    src/inference/model/ffn.c
-    src/inference/model/attention_layer.c
-    src/inference/model/transformer_layer.c
-    src/inference/model/qwen3.c
+    src/inference/model/base.c
+    src/inference/model/qwen3/config.c
+    src/inference/model/qwen3/weights.c
+    src/inference/model/qwen3/ffn.c
+    src/inference/model/qwen3/attention_layer.c
+    src/inference/model/qwen3/transformer_layer.c
+    src/inference/model/qwen3/qwen3.c
     src/inference/tokenizer/gpt2bpe.c
     src/inference/tokenizer/simd.c
     src/inference/tokenizer/unicode_tables.c
@@ -470,7 +472,7 @@ add_executable(qwen3_inference
     src/inference/kernels/sampling/sampling.c
     src/inference/kernels/sampling/sampling_neon.c
 )
-set_source_files_properties(src/inference/model/weights.c PROPERTIES
+set_source_files_properties(src/inference/model/qwen3/weights.c PROPERTIES
     COMPILE_FLAGS "-x c++ -std=c++11"
     LANGUAGE CXX
 )

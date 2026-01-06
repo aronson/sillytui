@@ -1,10 +1,10 @@
-#include "inference/model/qwen3.h"
+#include "qwen3.h"
 #include "inference/kernels/embedding/embedding.h"
 #include "inference/kernels/gemm/gemm.h"
 #include "inference/kernels/norm/layernorm.h"
 #include "inference/kernels/rope/rope.h"
 #include "inference/kernels/sampling/sampling.h"
-#include "inference/model/transformer_layer.h"
+#include "transformer_layer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

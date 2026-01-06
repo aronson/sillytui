@@ -1,4 +1,4 @@
-#include "inference/model/ffn.h"
+#include "ffn.h"
 #include "inference/kernels/activation/activation.h"
 #include "inference/kernels/gemm/gemm.h"
 #include <stdlib.h>

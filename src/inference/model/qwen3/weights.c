@@ -1,4 +1,4 @@
-#include "inference/model/weights.h"
+#include "weights.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

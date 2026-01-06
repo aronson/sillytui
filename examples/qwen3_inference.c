@@ -1,4 +1,4 @@
-#include "inference/model/qwen3.h"
+#include "inference/model/qwen3/qwen3.h"
 #include "inference/tokenizer/gpt2bpe.h"
 #include "inference/tokenizer/simd.h"
 #include "inference/kernels/sampling/sampling.h"

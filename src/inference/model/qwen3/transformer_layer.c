@@ -1,7 +1,7 @@
-#include "inference/model/transformer_layer.h"
+#include "transformer_layer.h"
+#include "attention_layer.h"
+#include "ffn.h"
 #include "inference/kernels/norm/layernorm.h"
-#include "inference/model/attention_layer.h"
-#include "inference/model/ffn.h"
 #include <stdlib.h>
 #include <string.h>
 
