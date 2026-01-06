@@ -96,6 +96,8 @@ set(SOURCES
     src/inference/linalg/layernorm_neon.c
     src/inference/linalg/activation.c
     src/inference/linalg/activation_neon.c
+    src/inference/linalg/rope.c
+    src/inference/linalg/rope_neon.c
 )
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
@@ -135,6 +137,8 @@ set(TEST_SOURCES
     tests/test_layernorm.cc
     tests/test_activation.cc
     tests/test_activation_pytorch_accuracy.cc
+    tests/test_rope.cc
+    tests/test_rope_pytorch_accuracy.cc
     src/core/config.c
     src/core/macros.c
     src/core/time.c
@@ -161,6 +165,8 @@ set(TEST_SOURCES
     src/inference/linalg/layernorm_neon.c
     src/inference/linalg/activation.c
     src/inference/linalg/activation_neon.c
+    src/inference/linalg/rope.c
+    src/inference/linalg/rope_neon.c
     src/ui/modal.c
     src/ui/ui.c
     src/ui/markdown.c
@@ -193,6 +199,8 @@ set_source_files_properties(tests/test_gemm_pytorch_accuracy.cc PROPERTIES COMPI
 set_source_files_properties(tests/test_layernorm.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 set_source_files_properties(tests/test_activation.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 set_source_files_properties(tests/test_activation_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/test_rope.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/test_rope_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 
 enable_testing()
 add_test(NAME unit_tests COMMAND run_tests)
@@ -265,6 +273,8 @@ set(ALL_TEST_SOURCES
     tests/test_layernorm.cc
     tests/test_activation.cc
     tests/test_activation_pytorch_accuracy.cc
+    tests/test_rope.cc
+    tests/test_rope_pytorch_accuracy.cc
     tests/boundary/test_boundary.c
     tests/stress/test_stress.c
     tests/generated/test_unicode_gen.c
@@ -306,6 +316,8 @@ set(ALL_TEST_SOURCES
     src/inference/linalg/layernorm_neon.c
     src/inference/linalg/activation.c
     src/inference/linalg/activation_neon.c
+    src/inference/linalg/rope.c
+    src/inference/linalg/rope_neon.c
     src/ui/modal.c
     src/ui/ui.c
     src/ui/markdown.c
@@ -410,4 +422,8 @@ endif()
 add_executable(bench_activation bench/bench_activation.c src/inference/linalg/activation.c src/inference/linalg/activation_neon.c)
 target_include_directories(bench_activation PRIVATE src)
 target_compile_options(bench_activation PRIVATE -O3 -ffast-math)
+
+add_executable(bench_rope bench/bench_rope.c src/inference/linalg/rope.c src/inference/linalg/rope_neon.c)
+target_include_directories(bench_rope PRIVATE src)
+target_compile_options(bench_rope PRIVATE -O3 -ffast-math)
 target_link_libraries(bench_activation PRIVATE Threads::Threads m)

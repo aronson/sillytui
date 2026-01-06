@@ -358,6 +358,7 @@ TEST(pytorch_accuracy_llm_fp16) {
 }
 
 extern "C" void run_gemm_pytorch_accuracy_tests(void) {
+  TEST_SUITE("GEMM (FP32/FP16/BF16) - PyTorch Accuracy");
   RUN_TEST(pytorch_accuracy_medium_fp32);
   RUN_TEST(pytorch_accuracy_medium_bf16);
   RUN_TEST(pytorch_accuracy_medium_fp16);

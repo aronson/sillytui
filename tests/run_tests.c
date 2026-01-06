@@ -20,6 +20,8 @@ extern void run_gemm_pytorch_accuracy_tests(void);
 extern void run_layernorm_tests(void);
 extern void run_activation_tests(void);
 extern void run_activation_pytorch_tests(void);
+extern void run_rope_tests(void);
+extern void run_rope_pytorch_tests(void);
 
 int main(int argc, char **argv) {
   (void)argc;
@@ -48,6 +50,8 @@ int main(int argc, char **argv) {
   run_layernorm_tests();
   run_activation_tests();
   run_activation_pytorch_tests();
+  run_rope_tests();
+  run_rope_pytorch_tests();
 
   print_test_summary();
 
