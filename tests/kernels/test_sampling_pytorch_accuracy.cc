@@ -21,8 +21,8 @@ static bool load_reference_data() {
     return true;
 
   std::string warn, err;
-  bool ok = safetensors::mmap_from_file("tests/sampling_reference.safetensors",
-                                        &g_st, &warn, &err);
+  bool ok = safetensors::mmap_from_file(
+      "tests/reference/sampling_reference.safetensors", &g_st, &warn, &err);
   if (!ok) {
     printf("Failed to load sampling reference data: %s\n", err.c_str());
     return false;

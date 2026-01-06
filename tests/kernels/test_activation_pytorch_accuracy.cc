@@ -23,7 +23,8 @@ static bool load_reference_data() {
 
   std::string warn, err;
   bool ret = safetensors::mmap_from_file(
-      "tests/activation_reference.safetensors", &g_reference_data, &warn, &err);
+      "tests/reference/activation_reference.safetensors", &g_reference_data,
+      &warn, &err);
   if (!ret) {
     fprintf(stderr, "Failed to load activation reference: %s\n", err.c_str());
     return false;

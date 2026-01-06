@@ -27,8 +27,8 @@ static void extract_hadamard_tensor(const char *key, int expected_dim,
   safetensors::safetensors_t st;
   std::string warn, err;
 
-  bool ret = safetensors::mmap_from_file("tests/hadamard.safetensors", &st,
-                                         &warn, &err);
+  bool ret = safetensors::mmap_from_file("tests/reference/hadamard.safetensors",
+                                         &st, &warn, &err);
   if (!ret) {
     *out_data = nullptr;
     *out_size = 0;

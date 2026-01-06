@@ -4,7 +4,7 @@
 #include "inference/model_loader/safetensors.hh"
 
 static const char *get_test_file_path(void) {
-  return "tests/hadamard.safetensors";
+  return "tests/reference/hadamard.safetensors";
 }
 
 static const char *get_optional_model_path(void) {

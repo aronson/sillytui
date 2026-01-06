@@ -32,8 +32,9 @@ static bool load_reference_data() {
     return true;
 
   std::string warn, err;
-  bool ret = safetensors::mmap_from_file("tests/gemm_reference.safetensors",
-                                         &g_reference_data, &warn, &err);
+  bool ret =
+      safetensors::mmap_from_file("tests/reference/gemm_reference.safetensors",
+                                  &g_reference_data, &warn, &err);
   if (!ret) {
     fprintf(stderr, "Failed to load reference data: %s\n", err.c_str());
     return false;

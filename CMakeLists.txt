@@ -142,22 +142,22 @@ set(TEST_SOURCES
     tests/test_attachments.c
     tests/safetensors_impl.cc
     tests/test_safetensors.cc
-    tests/test_gemm.cc
-    tests/test_gemm_pytorch_accuracy.cc
-    tests/test_layernorm.cc
-    tests/test_activation.cc
-    tests/test_activation_pytorch_accuracy.cc
-    tests/test_rope.cc
-    tests/test_rope_pytorch_accuracy.cc
-    tests/test_softmax.cc
-    tests/test_softmax_pytorch_accuracy.cc
-    tests/test_attention.cc
-    tests/test_embedding.cc
-    tests/test_embedding_pytorch_accuracy.cc
-    tests/test_sampling.cc
-    tests/test_sampling_pytorch_accuracy.cc
-    tests/test_kv_cache.cc
-    tests/test_kv_cache_pytorch_accuracy.cc
+    tests/kernels/test_gemm.cc
+    tests/kernels/test_gemm_pytorch_accuracy.cc
+    tests/kernels/test_layernorm.cc
+    tests/kernels/test_activation.cc
+    tests/kernels/test_activation_pytorch_accuracy.cc
+    tests/kernels/test_rope.cc
+    tests/kernels/test_rope_pytorch_accuracy.cc
+    tests/kernels/test_softmax.cc
+    tests/kernels/test_softmax_pytorch_accuracy.cc
+    tests/kernels/test_attention.cc
+    tests/kernels/test_embedding.cc
+    tests/kernels/test_embedding_pytorch_accuracy.cc
+    tests/kernels/test_sampling.cc
+    tests/kernels/test_sampling_pytorch_accuracy.cc
+    tests/kernels/test_kv_cache.cc
+    tests/kernels/test_kv_cache_pytorch_accuracy.cc
     src/core/config.c
     src/core/macros.c
     src/core/time.c
@@ -223,13 +223,13 @@ if(APPLE)
     target_link_libraries(run_tests PRIVATE "-framework Accelerate")
 endif()
 set_source_files_properties(tests/test_safetensors.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
-set_source_files_properties(tests/test_gemm.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
-set_source_files_properties(tests/test_gemm_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
-set_source_files_properties(tests/test_layernorm.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
-set_source_files_properties(tests/test_activation.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
-set_source_files_properties(tests/test_activation_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
-set_source_files_properties(tests/test_rope.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
-set_source_files_properties(tests/test_rope_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/kernels/test_gemm.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/kernels/test_gemm_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/kernels/test_layernorm.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/kernels/test_activation.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/kernels/test_activation_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/kernels/test_rope.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/kernels/test_rope_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 
 enable_testing()
 add_test(NAME unit_tests COMMAND run_tests)
@@ -297,22 +297,22 @@ set(ALL_TEST_SOURCES
     tests/test_tokenizer_selector.c
     tests/safetensors_impl.cc
     tests/test_safetensors.cc
-    tests/test_gemm.cc
-    tests/test_gemm_pytorch_accuracy.cc
-    tests/test_layernorm.cc
-    tests/test_activation.cc
-    tests/test_activation_pytorch_accuracy.cc
-    tests/test_rope.cc
-    tests/test_rope_pytorch_accuracy.cc
-    tests/test_softmax.cc
-    tests/test_softmax_pytorch_accuracy.cc
-    tests/test_attention.cc
-    tests/test_embedding.cc
-    tests/test_embedding_pytorch_accuracy.cc
-    tests/test_sampling.cc
-    tests/test_sampling_pytorch_accuracy.cc
-    tests/test_kv_cache.cc
-    tests/test_kv_cache_pytorch_accuracy.cc
+    tests/kernels/test_gemm.cc
+    tests/kernels/test_gemm_pytorch_accuracy.cc
+    tests/kernels/test_layernorm.cc
+    tests/kernels/test_activation.cc
+    tests/kernels/test_activation_pytorch_accuracy.cc
+    tests/kernels/test_rope.cc
+    tests/kernels/test_rope_pytorch_accuracy.cc
+    tests/kernels/test_softmax.cc
+    tests/kernels/test_softmax_pytorch_accuracy.cc
+    tests/kernels/test_attention.cc
+    tests/kernels/test_embedding.cc
+    tests/kernels/test_embedding_pytorch_accuracy.cc
+    tests/kernels/test_sampling.cc
+    tests/kernels/test_sampling_pytorch_accuracy.cc
+    tests/kernels/test_kv_cache.cc
+    tests/kernels/test_kv_cache_pytorch_accuracy.cc
     tests/boundary/test_boundary.c
     tests/stress/test_stress.c
     tests/generated/test_unicode_gen.c

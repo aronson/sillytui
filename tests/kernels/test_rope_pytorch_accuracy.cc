@@ -21,8 +21,8 @@ static bool load_rope_reference() {
     return true;
 
   std::string warn, err;
-  if (!safetensors::mmap_from_file("tests/rope_reference.safetensors", &g_st,
-                                   &warn, &err)) {
+  if (!safetensors::mmap_from_file("tests/reference/rope_reference.safetensors",
+                                   &g_st, &warn, &err)) {
     printf("Failed to load rope reference: %s\n", err.c_str());
     return false;
   }

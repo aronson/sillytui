@@ -21,8 +21,8 @@ static bool load_reference_data() {
     return true;
 
   std::string warn, err;
-  bool ok = safetensors::mmap_from_file("tests/kv_cache_reference.safetensors",
-                                        &g_st, &warn, &err);
+  bool ok = safetensors::mmap_from_file(
+      "tests/reference/kv_cache_reference.safetensors", &g_st, &warn, &err);
   if (!ok) {
     printf("Failed to load KV cache reference data: %s\n", err.c_str());
     return false;

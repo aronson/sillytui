@@ -24,7 +24,8 @@ static bool load_reference_data() {
 
   std::string warn, err;
   bool ret = safetensors::mmap_from_file(
-      "tests/layernorm_reference.safetensors", &g_reference_data, &warn, &err);
+      "tests/reference/layernorm_reference.safetensors", &g_reference_data,
+      &warn, &err);
   if (!ret) {
     fprintf(stderr, "Failed to load layernorm reference: %s\n", err.c_str());
     return false;
