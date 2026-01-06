@@ -5,14 +5,14 @@
  * BF16: Converts to F32 on-the-fly and uses AMX F32 instructions.
  */
 
-#include "gemm_kernels.h"
+#include "inference/linalg/gemm/gemm_kernels.h"
 #include <arm_neon.h>
 #include <stdlib.h>
 #include <string.h>
 
 #if defined(__APPLE__) && defined(__aarch64__)
 
-#include "amx/aarch64.h"
+#include "inference/linalg/amx/aarch64.h"
 #include <pthread.h>
 
 /* AMX Operations */

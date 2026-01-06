@@ -14,7 +14,7 @@
 #include <string>
 
 extern "C" {
-#include "inference/linalg/gemm.h"
+#include "inference/linalg/gemm/gemm.h"
 }
 
 struct TestCase {

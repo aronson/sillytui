@@ -2,8 +2,8 @@
  * Rotary Position Embeddings - Reference/Scalar Implementations
  */
 
-#include "rope.h"
-#include "rope_kernels.h"
+#include "inference/linalg/rope/rope.h"
+#include "inference/linalg/rope/rope_kernels.h"
 #include <math.h>
 #include <string.h>
 

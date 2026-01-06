@@ -4,7 +4,7 @@
  * Uses fast polynomial approximations for transcendental functions.
  */
 
-#include "activation_kernels.h"
+#include "inference/linalg/activation/activation_kernels.h"
 #include <math.h>
 #include <string.h>
 

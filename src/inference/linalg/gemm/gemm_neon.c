@@ -1,4 +1,4 @@
-#include "gemm_kernels.h"
+#include "inference/linalg/gemm/gemm_kernels.h"
 #include <stdlib.h>
 #include <string.h>
 

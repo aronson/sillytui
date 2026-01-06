@@ -2,8 +2,8 @@
  * Layer Normalization Operations - Reference Implementations
  */
 
-#include "layernorm.h"
-#include "layernorm_kernels.h"
+#include "inference/linalg/norm/layernorm.h"
+#include "inference/linalg/norm/layernorm_kernels.h"
 #include <math.h>
 #include <string.h>
 
