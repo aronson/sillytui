@@ -119,7 +119,8 @@ TEST(safetensors_get_dtype_bytes) {
   ASSERT_EQ_SIZE(2, safetensors::get_dtype_bytes(safetensors::dtype::kINT16));
   ASSERT_EQ_SIZE(2, safetensors::get_dtype_bytes(safetensors::dtype::kUINT16));
   ASSERT_EQ_SIZE(2, safetensors::get_dtype_bytes(safetensors::dtype::kFLOAT16));
-  ASSERT_EQ_SIZE(2, safetensors::get_dtype_bytes(safetensors::dtype::kBFLOAT16));
+  ASSERT_EQ_SIZE(2,
+                 safetensors::get_dtype_bytes(safetensors::dtype::kBFLOAT16));
   ASSERT_EQ_SIZE(4, safetensors::get_dtype_bytes(safetensors::dtype::kINT32));
   ASSERT_EQ_SIZE(4, safetensors::get_dtype_bytes(safetensors::dtype::kUINT32));
   ASSERT_EQ_SIZE(4, safetensors::get_dtype_bytes(safetensors::dtype::kFLOAT32));
@@ -132,7 +133,7 @@ TEST(safetensors_get_dtype_bytes) {
 
 TEST(safetensors_get_dtype_str) {
   std::string s;
-  
+
   s = safetensors::get_dtype_str(safetensors::dtype::kBOOL);
   ASSERT_EQ_STR("BOOL", s.c_str());
   s = safetensors::get_dtype_str(safetensors::dtype::kUINT8);
@@ -197,7 +198,7 @@ TEST(safetensors_load_nonexistent_file) {
   safetensors::safetensors_t st;
   std::string warn, err;
 
-  bool ret = safetensors::load_from_file("/nonexistent/path/model.safetensors", 
+  bool ret = safetensors::load_from_file("/nonexistent/path/model.safetensors",
                                          &st, &warn, &err);
 
   ASSERT_FALSE(ret);

@@ -239,6 +239,8 @@ void gemm_bf16(const uint16_t *A, const uint16_t *B, uint16_t *C, int M, int N,
     return;
 
   gemm_caps_t caps = gemm_get_capabilities();
+  /* BF16: NEON is faster than AMX (AMX requires BF16->F32 conversion overhead)
+   */
   if (caps.has_neon) {
     int nt = gemm_get_num_threads();
     long long flops = (long long)M * N * K * 2;
@@ -272,6 +274,19 @@ void gemm_f16(const uint16_t *A, const uint16_t *B, uint16_t *C, int M, int N,
     return;
 
   gemm_caps_t caps = gemm_get_capabilities();
+  if (caps.has_amx) {
+    int nt = gemm_get_num_threads();
+    long long flops = (long long)M * N * K * 2;
+    if (M >= 32 && N >= 32) {
+      if (nt > 1 && M >= 64 && flops >= MT_THRESHOLD_FLOPS) {
+        gemm_f16_kernel_amx_mt(A, B, C, M, N, K, nt);
+      } else {
+        gemm_f16_kernel_amx(A, B, C, M, N, K);
+      }
+      return;
+    }
+  }
+
   if (caps.has_neon) {
     int nt = gemm_get_num_threads();
     long long flops = (long long)M * N * K * 2;

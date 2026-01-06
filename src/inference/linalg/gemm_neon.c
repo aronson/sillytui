@@ -89,6 +89,9 @@ gemm_caps_t gemm_get_capabilities(void) {
 #if HAS_NEON
   caps.has_neon = true;
 #endif
+#if defined(__APPLE__) && defined(__aarch64__)
+  caps.has_amx = true;
+#endif
   return caps;
 }
 

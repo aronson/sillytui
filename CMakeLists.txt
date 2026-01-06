@@ -91,6 +91,7 @@ set(SOURCES
     src/inference/tokenizer/unicode_tables.c
     src/inference/linalg/gemm.c
     src/inference/linalg/gemm_neon.c
+    src/inference/linalg/gemm_amx.c
 )
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
@@ -126,6 +127,7 @@ set(TEST_SOURCES
     tests/safetensors_impl.cc
     tests/test_safetensors.cc
     tests/test_gemm.cc
+    tests/test_gemm_pytorch_accuracy.cc
     src/core/config.c
     src/core/macros.c
     src/core/time.c
@@ -147,6 +149,7 @@ set(TEST_SOURCES
     src/inference/tokenizer/sentencepiece.c
     src/inference/linalg/gemm.c
     src/inference/linalg/gemm_neon.c
+    src/inference/linalg/gemm_amx.c
     src/ui/modal.c
     src/ui/ui.c
     src/ui/markdown.c
@@ -175,6 +178,7 @@ if(APPLE)
 endif()
 set_source_files_properties(tests/test_safetensors.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 set_source_files_properties(tests/test_gemm.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
+set_source_files_properties(tests/test_gemm_pytorch_accuracy.cc PROPERTIES COMPILE_FLAGS "-Wno-error -Wno-ignored-qualifiers -Wno-unused-parameter -Wno-unused-variable")
 
 enable_testing()
 add_test(NAME unit_tests COMMAND run_tests)
@@ -243,6 +247,7 @@ set(ALL_TEST_SOURCES
     tests/safetensors_impl.cc
     tests/test_safetensors.cc
     tests/test_gemm.cc
+    tests/test_gemm_pytorch_accuracy.cc
     tests/boundary/test_boundary.c
     tests/stress/test_stress.c
     tests/generated/test_unicode_gen.c
@@ -279,6 +284,7 @@ set(ALL_TEST_SOURCES
     src/inference/tokenizer/unicode_tables.c
     src/inference/linalg/gemm.c
     src/inference/linalg/gemm_neon.c
+    src/inference/linalg/gemm_amx.c
     src/ui/modal.c
     src/ui/ui.c
     src/ui/markdown.c
@@ -348,7 +354,7 @@ target_compile_options(load_model PRIVATE
     -Wno-error
 )
 
-add_executable(bench_gemm bench/bench_gemm.c src/inference/linalg/gemm.c src/inference/linalg/gemm_neon.c)
+add_executable(bench_gemm bench/bench_gemm.c src/inference/linalg/gemm.c src/inference/linalg/gemm_neon.c src/inference/linalg/gemm_amx.c)
 target_include_directories(bench_gemm PRIVATE src)
 target_compile_options(bench_gemm PRIVATE -O3 -ffast-math)
 target_link_libraries(bench_gemm PRIVATE Threads::Threads)
@@ -356,11 +362,18 @@ if(APPLE)
     target_link_libraries(bench_gemm PRIVATE "-framework Accelerate")
 endif()
 
-add_executable(profile_gemm bench/profile_gemm.c src/inference/linalg/gemm.c src/inference/linalg/gemm_neon.c)
+add_executable(profile_gemm bench/profile_gemm.c src/inference/linalg/gemm.c src/inference/linalg/gemm_neon.c src/inference/linalg/gemm_amx.c)
 target_include_directories(profile_gemm PRIVATE src)
 target_compile_options(profile_gemm PRIVATE -O3 -ffast-math -g)
 target_link_libraries(profile_gemm PRIVATE Threads::Threads)
+if(APPLE)
+    target_link_libraries(profile_gemm PRIVATE "-framework Accelerate")
+endif()
 
-add_executable(profile_detailed bench/profile_detailed.c src/inference/linalg/gemm.c src/inference/linalg/gemm_neon.c)
+add_executable(profile_detailed bench/profile_detailed.c src/inference/linalg/gemm.c src/inference/linalg/gemm_neon.c src/inference/linalg/gemm_amx.c)
 target_include_directories(profile_detailed PRIVATE src)
 target_compile_options(profile_detailed PRIVATE -O3 -ffast-math -g)
+target_link_libraries(profile_detailed PRIVATE Threads::Threads)
+if(APPLE)
+    target_link_libraries(profile_detailed PRIVATE "-framework Accelerate")
+endif()
