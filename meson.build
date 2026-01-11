@@ -179,6 +179,7 @@ executable('sillytui',
   link_with : ulight_lib,
   c_args : c_args,
   cpp_args : cpp_args,
+  install : true,
 )
 
 # Tests
