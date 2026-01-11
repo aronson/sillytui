@@ -40,13 +40,15 @@ if host_machine.cpu_family() == 'x86_64'
 endif
 
 # Dependencies
-curses_dep = dependency('ncursesw', required : false)
+use_static = get_option('static_deps')
+
+curses_dep = dependency('ncursesw', required : false, static : use_static)
 if not curses_dep.found()
-  curses_dep = dependency('ncurses', required : true)
+  curses_dep = dependency('ncurses', required : true, static : use_static)
 endif
-curl_dep = dependency('libcurl', required : true)
+curl_dep = dependency('libcurl', required : true, static : use_static)
 thread_dep = dependency('threads')
-m_dep = cc.find_library('m', required : false)
+m_dep = cc.find_library('m', required : false, static : use_static)
 
 deps = [curses_dep, curl_dep, thread_dep, m_dep]
 
